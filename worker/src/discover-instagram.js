@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
+import { BrowserUseClient } from 'browser-use-sdk';
 
 dotenv.config();
 
@@ -45,70 +46,96 @@ async function discoverInstagramTrends() {
 }
 
 /**
- * Use Browser Use API to scrape Instagram trends
- * Direct API integration using axios
+ * Use Browser Use Cloud SDK to scrape Instagram trends
+ * Browser Use Cloud is a managed service - no Daytona setup needed!
  */
 async function scrapeInstagramWithBrowserUse() {
-  console.log('[Browser Use] Starting real Instagram discovery...');
+  console.log('[Browser Use Cloud] Starting Instagram discovery...');
   
   if (!BROWSER_USE_API_KEY) {
-    console.error('[Browser Use] API key not configured');
+    console.error('[Browser Use Cloud] API key not configured');
     return [];
   }
   
   try {
-    // Call Browser Use API to scrape Instagram
-    console.log('[Browser Use] Creating task for Instagram explore...');
+    // Initialize Browser Use Cloud client
+    const client = new BrowserUseClient({
+      apiKey: BROWSER_USE_API_KEY
+    });
     
-    const response = await axios.post('https://api.browseruse.com/v1/execute', {
-      task: `Navigate to Instagram explore page and extract trending hashtags. 
-             For each trending hashtag, get: 
-             1. Hashtag name
-             2. Post count
-             3. Recent activity indicators
-             4. Engagement level (likes, comments)
-             Return as JSON array with fields: hashtag, postCount, recentPosts, engagement`,
-      browser: 'chromium',
-      headless: true,
-      credentials: {
-        instagram: {
-          username: INSTAGRAM_USERNAME,
-          password: INSTAGRAM_PASSWORD
+    console.log('[Browser Use Cloud] Creating browser task...');
+    
+    // Create task to scrape Instagram trends
+    const task = await client.tasks.createTask({
+      task: `Go to Instagram explore page (instagram.com/explore). 
+             If login is required, use username: ${INSTAGRAM_USERNAME} and password: ${INSTAGRAM_PASSWORD}.
+             Extract the top 10 trending hashtags currently showing.
+             For each trending hashtag, collect:
+             1. Hashtag name (including #)
+             2. Approximate post count
+             3. Engagement indicators (likes, comments visible)
+             Return as a JSON array with format: 
+             [{"hashtag": "#example", "postCount": 15000, "engagement": "high"}]`,
+      resultSchema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            hashtag: { type: 'string' },
+            postCount: { type: 'number' },
+            engagement: { type: 'string' }
+          }
         }
-      },
-      timeout: 60000
-    }, {
-      headers: {
-        'Authorization': `Bearer ${BROWSER_USE_API_KEY}`,
-        'Content-Type': 'application/json'
       }
     });
     
-    if (!response.data || !response.data.result) {
-      console.warn('[Browser Use] No data returned from API');
+    console.log(`[Browser Use Cloud] Task created: ${task.id}`);
+    console.log('[Browser Use Cloud] Waiting for completion...');
+    
+    // Wait for task to complete
+    const result = await task.complete();
+    
+    if (!result || !result.output) {
+      console.warn('[Browser Use Cloud] No data returned');
       return [];
     }
     
-    console.log(`[Browser Use] Received ${response.data.result.length} raw trends`);
+    console.log(`[Browser Use Cloud] Task completed successfully`);
+    
+    // Parse the output
+    let rawTrends = [];
+    if (typeof result.output === 'string') {
+      try {
+        rawTrends = JSON.parse(result.output);
+      } catch (e) {
+        console.error('[Browser Use Cloud] Failed to parse output:', e.message);
+        return [];
+      }
+    } else if (Array.isArray(result.output)) {
+      rawTrends = result.output;
+    }
+    
+    console.log(`[Browser Use Cloud] Received ${rawTrends.length} raw trends`);
     
     // Transform Browser Use results into our trend format
-    const trends = response.data.result
+    const trends = rawTrends
       .filter(item => item.hashtag && item.postCount)
       .slice(0, 10) // Top 10 trends
       .map(item => {
         const postCount = parseInt(item.postCount) || 0;
-        const recentPosts = parseInt(item.recentPosts) || Math.floor(postCount * 0.1);
+        const recentPosts = Math.floor(postCount * 0.12); // Estimate 12% recent
         const velocity = calculateVelocity(postCount, recentPosts);
-        const score = calculateScore(velocity, item.engagement);
+        const engagement = (item.engagement || 'moderate').toLowerCase();
+        const score = calculateScore(velocity, engagement);
         
         return {
           keyword: item.hashtag.startsWith('#') ? item.hashtag : `#${item.hashtag}`,
           source: 'instagram',
           score: score,
-          reason: `${velocity} velocity with ${item.engagement || 'moderate'} engagement`,
+          reason: `${velocity} velocity with ${engagement} engagement`,
           metadata: {
             postCount: postCount,
-            engagement: item.engagement || 'moderate',
+            engagement: engagement,
             velocity: velocity,
             recentPosts: recentPosts,
             hashtags: [item.hashtag]
@@ -116,13 +143,13 @@ async function scrapeInstagramWithBrowserUse() {
         };
       });
     
-    console.log(`[Browser Use] Processed ${trends.length} trends`);
+    console.log(`[Browser Use Cloud] Processed ${trends.length} trends for reporting`);
     return trends;
     
   } catch (error) {
-    console.error('[Browser Use] Error:', error.message);
+    console.error('[Browser Use Cloud] Error:', error.message);
     if (error.response) {
-      console.error('[Browser Use] API Response:', error.response.status, error.response.data);
+      console.error('[Browser Use Cloud] Response:', error.response.status, error.response.data);
     }
     
     // Return empty array on error - worker will retry on next cycle

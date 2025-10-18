@@ -2,6 +2,9 @@
 
 ## AutoViral — Fully‑Automated Trend→Content→Post→Monetize Engine (Daytona‑Native)
 
+🌐 **Live App:** [https://app.viral.biaz.hurated.com](https://app.viral.biaz.hurated.com)  
+📊 **API:** [https://viral.biaz.hurated.com](https://viral.biaz.hurated.com)
+
 **AutoViral** is an AI system that detects brand‑new social trends in near‑real‑time, manufactures short vertical videos (with audio + subtitles), posts them autonomously across selected networks, monitors performance, and doubles down on winners — all while letting a human **veto/stop** any trend at any time via API.
 
 * **Runtime:** Daytona sandboxes (workspaces are created/destroyed on demand)
