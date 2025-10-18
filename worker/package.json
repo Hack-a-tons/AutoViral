@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "dotenv": "^16.3.1",
-    "axios": "^1.6.2",
-    "@daytona-ai/browser-use": "^latest"
+    "axios": "^1.6.2"
   }
 }
