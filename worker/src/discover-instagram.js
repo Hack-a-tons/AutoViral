@@ -90,7 +90,16 @@ async function scrapeInstagramWithBrowserUse() {
       }
     });
     
-    const taskId = createResponse.data.task_id;
+    // Log full response to debug structure
+    console.log('[Browser Use Cloud] Response:', JSON.stringify(createResponse.data));
+    
+    // Try different possible field names
+    const taskId = createResponse.data.task_id || createResponse.data.id || createResponse.data.taskId;
+    
+    if (!taskId) {
+      throw new Error(`No task ID in response. Response: ${JSON.stringify(createResponse.data)}`);
+    }
+    
     console.log(`[Browser Use Cloud] Task created: ${taskId}`);
     console.log(`[Browser Use Cloud] Status: ${createResponse.data.status}`);
     if (createResponse.data.live_url) {
