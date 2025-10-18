@@ -13,7 +13,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # API base URL
-API_URL="${API_URL:-http://api.viral.hurated.com}"
+API_URL="${API_URL:-https://viral.biaz.hurated.com}"
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}  AutoViral API Test Suite${NC}"

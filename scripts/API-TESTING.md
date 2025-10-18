@@ -34,38 +34,38 @@ Shows example commands for all endpoints with copy-paste ready code.
 
 ### Health Check
 ```bash
-curl http://api.viral.hurated.com/health | jq .
+curl https://viral.biaz.hurated.com/health | jq .
 ```
 
 ### Get All Trends
 ```bash
-curl http://api.viral.hurated.com/trends | jq .
+curl https://viral.biaz.hurated.com/trends | jq .
 ```
 
 ### Get Recent Trends
 ```bash
-curl 'http://api.viral.hurated.com/trends?since=1h' | jq .
+curl 'https://viral.biaz.hurated.com/trends?since=1h' | jq .
 ```
 
 ### Filter by Source
 ```bash
-curl 'http://api.viral.hurated.com/trends?source=instagram' | jq .
+curl 'https://viral.biaz.hurated.com/trends?source=instagram' | jq .
 ```
 
 ### Get Top 5 Trends
 ```bash
-curl 'http://api.viral.hurated.com/trends?limit=5' | jq .
+curl 'https://viral.biaz.hurated.com/trends?limit=5' | jq .
 ```
 
 ### Get Single Trend
 ```bash
 # Replace TREND_ID with actual ID
-curl http://api.viral.hurated.com/trends/TREND_ID | jq .
+curl https://viral.biaz.hurated.com/trends/TREND_ID | jq .
 ```
 
 ### Report New Trend (Webhook)
 ```bash
-curl -X POST http://api.viral.hurated.com/webhook/trend \
+curl -X POST https://viral.biaz.hurated.com/webhook/trend \
   -H "Content-Type: application/json" \
   -d '{
     "keyword": "#TestTrend",
@@ -82,12 +82,12 @@ curl -X POST http://api.viral.hurated.com/webhook/trend \
 ### Stop a Trend
 ```bash
 # Replace TREND_ID with actual ID
-curl -X POST http://api.viral.hurated.com/stop/trend/TREND_ID
+curl -X POST https://viral.biaz.hurated.com/stop/trend/TREND_ID
 ```
 
 ### Stop by Keyword
 ```bash
-curl -X POST http://api.viral.hurated.com/stop/keyword \
+curl -X POST https://viral.biaz.hurated.com/stop/keyword \
   -H "Content-Type: application/json" \
   -d '{"keyword": "#TrendToStop"}'
 ```
@@ -96,10 +96,10 @@ curl -X POST http://api.viral.hurated.com/stop/keyword \
 
 ```bash
 # Check every 10 seconds
-watch -n 10 "curl -s 'http://api.viral.hurated.com/trends?since=5m' | jq '.count'"
+watch -n 10 "curl -s 'https://viral.biaz.hurated.com/trends?since=5m' | jq '.count'"
 
 # Monitor top trend
-watch -n 5 "curl -s 'http://api.viral.hurated.com/trends?limit=1' | jq '.trends[0] | {keyword, score, velocity: .metadata.velocity}'"
+watch -n 5 "curl -s 'https://viral.biaz.hurated.com/trends?limit=1' | jq '.trends[0] | {keyword, score, velocity: .metadata.velocity}'"
 ```
 
 ## Response Format
@@ -154,10 +154,10 @@ All endpoints are publicly accessible. No API keys or Bearer tokens needed.
 
 ```bash
 # For local testing
-export API_URL=http://localhost:3000
+export API_URL=http://localhost:33000
 ./scripts/test-api.sh
 
-# For production
-export API_URL=http://api.viral.hurated.com
+# For production (default)
+export API_URL=https://viral.biaz.hurated.com
 ./scripts/test-api.sh
 ```

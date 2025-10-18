@@ -3,7 +3,7 @@
 # Quick API examples for testing
 # Run individual commands or source this file
 
-API_URL="${API_URL:-http://api.viral.hurated.com}"
+API_URL="${API_URL:-https://viral.biaz.hurated.com}"
 
 echo "AutoViral API Examples"
 echo "======================"

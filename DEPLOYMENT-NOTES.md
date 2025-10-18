@@ -1,25 +1,35 @@
-# Deployment Notes for api.viral.hurated.com
+# Deployment Notes for viral.biaz.hurated.com
 
 ## Port to Expose
 
-**Expose port 33000** from the server to `api.viral.hurated.com`
+**Expose port 33000** from the server to `https://viral.biaz.hurated.com`
 
 ```bash
 # On your server (biaz.hurated.com), the API runs on:
 localhost:33000
 
-# Configure your reverse proxy or DNS to route:
-api.viral.hurated.com → biaz.hurated.com:33000
+# Configure your reverse proxy with SSL to route:
+https://viral.biaz.hurated.com → biaz.hurated.com:33000
 ```
 
 ## Nginx Configuration Example
 
-If using Nginx as reverse proxy:
+If using Nginx as reverse proxy with SSL:
 
 ```nginx
 server {
     listen 80;
-    server_name api.viral.hurated.com;
+    server_name viral.biaz.hurated.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name viral.biaz.hurated.com;
+
+    # SSL configuration (adjust paths as needed)
+    ssl_certificate /etc/letsencrypt/live/viral.biaz.hurated.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/viral.biaz.hurated.com/privkey.pem;
 
     location / {
         proxy_pass http://localhost:33000;
@@ -59,21 +69,21 @@ api:
 This means:
 - Container internal: Port 3000
 - Server external: Port 33000
-- Public DNS: api.viral.hurated.com → Port 33000
+- Public DNS: https://viral.biaz.hurated.com → Port 33000
 
 ## Testing After Exposure
 
-Once `api.viral.hurated.com` is configured, test with:
+Once `https://viral.biaz.hurated.com` is configured, test with:
 
 ```bash
 # Quick test
-curl http://api.viral.hurated.com/health
+curl https://viral.biaz.hurated.com/health
 
 # Full test suite
-./scripts/test-api.sh
+API_URL=https://viral.biaz.hurated.com ./scripts/test-api.sh
 
 # See all examples
-./scripts/api-examples.sh
+API_URL=https://viral.biaz.hurated.com ./scripts/api-examples.sh
 ```
 
 ## API is Public (No Authentication)
@@ -102,7 +112,7 @@ Add rate limiting or API keys in production.
 
 ✅ API deployed on `biaz.hurated.com:33000`  
 ✅ Authentication removed  
-⏳ Waiting for DNS/proxy configuration for `api.viral.hurated.com`  
+⏳ Waiting for SSL/proxy configuration for `https://viral.biaz.hurated.com`  
 
 ## Verification Commands
 
@@ -110,6 +120,6 @@ Add rate limiting or API keys in production.
 # From server (works now)
 ssh biaz.hurated.com "curl -s http://localhost:33000/health"
 
-# From external (after DNS setup)
-curl http://api.viral.hurated.com/health
+# From external (after SSL setup)
+curl https://viral.biaz.hurated.com/health
 ```

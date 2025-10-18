@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Quick API test - one command to test everything
 
-API_URL="${API_URL:-http://api.viral.hurated.com}"
+API_URL="${API_URL:-https://viral.biaz.hurated.com}"
 
 echo "Testing: $API_URL"
 echo ""
