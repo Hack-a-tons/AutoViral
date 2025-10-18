@@ -2,14 +2,14 @@
 
 ## Port to Expose
 
-**Expose port 3000** from the server to `api.viral.hurated.com`
+**Expose port 33000** from the server to `api.viral.hurated.com`
 
 ```bash
 # On your server (biaz.hurated.com), the API runs on:
-localhost:3000
+localhost:33000
 
 # Configure your reverse proxy or DNS to route:
-api.viral.hurated.com → biaz.hurated.com:3000
+api.viral.hurated.com → biaz.hurated.com:33000
 ```
 
 ## Nginx Configuration Example
@@ -22,7 +22,7 @@ server {
     server_name api.viral.hurated.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:33000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -37,14 +37,14 @@ server {
 
 ## Firewall Configuration
 
-Allow external access to port 3000:
+Allow external access to port 33000:
 
 ```bash
 # Using ufw
-sudo ufw allow 3000/tcp
+sudo ufw allow 33000/tcp
 
 # Or using iptables
-sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 33000 -j ACCEPT
 ```
 
 ## Docker Compose Port Mapping
@@ -53,13 +53,13 @@ Current configuration in `compose.yml`:
 ```yaml
 api:
   ports:
-    - "3000:3000"  # Maps host:3000 → container:3000
+    - "33000:3000"  # Maps host:33000 → container:3000
 ```
 
 This means:
 - Container internal: Port 3000
-- Server external: Port 3000
-- Public DNS: api.viral.hurated.com → Port 3000
+- Server external: Port 33000
+- Public DNS: api.viral.hurated.com → Port 33000
 
 ## Testing After Exposure
 
@@ -100,7 +100,7 @@ Add rate limiting or API keys in production.
 
 ## Current Status
 
-✅ API deployed on `biaz.hurated.com:3000`  
+✅ API deployed on `biaz.hurated.com:33000`  
 ✅ Authentication removed  
 ⏳ Waiting for DNS/proxy configuration for `api.viral.hurated.com`  
 
@@ -108,7 +108,7 @@ Add rate limiting or API keys in production.
 
 ```bash
 # From server (works now)
-ssh biaz.hurated.com "curl -s http://localhost:3000/health"
+ssh biaz.hurated.com "curl -s http://localhost:33000/health"
 
 # From external (after DNS setup)
 curl http://api.viral.hurated.com/health

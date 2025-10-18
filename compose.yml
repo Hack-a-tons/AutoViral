@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     container_name: autoviral-api
     ports:
-      - "${API_PORT:-3000}:3000"
+      - "${API_PORT:-33000}:3000"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
@@ -37,7 +37,7 @@ services:
       dockerfile: Dockerfile
     container_name: autoviral-worker
     ports:
-      - "${WORKER_PORT:-7000}:3001"
+      - "${WORKER_PORT:-34000}:3001"
     environment:
       - NODE_ENV=production
       - API_URL=${API_URL}
