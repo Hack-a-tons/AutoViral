@@ -124,8 +124,9 @@ async function scrapeInstagramWithBrowserUse() {
       
       const status = statusResponse.data.status;
       
-      if (status === 'completed' || status === 'done' || status === 'success') {
+      if (status === 'finished' || status === 'completed' || status === 'done' || status === 'success') {
         result = statusResponse.data;
+        console.log('[Browser Use Cloud] Task finished! Extracting results...');
         break;
       } else if (status === 'failed' || status === 'error') {
         throw new Error(`Task failed: ${statusResponse.data.error || statusResponse.data.message || 'Unknown error'}`);
@@ -140,23 +141,33 @@ async function scrapeInstagramWithBrowserUse() {
     }
     
     console.log(`[Browser Use Cloud] Task completed successfully`);
+    console.log('[Browser Use Cloud] Result keys:', Object.keys(result).join(', '));
     
-    // Parse the output
-    let rawTrends = [];
-    if (!result.output) {
-      console.warn('[Browser Use Cloud] No output data');
+    // Parse the output - try different field names
+    const outputData = result.output || result.result || result.data || result.extracted_content;
+    
+    if (!outputData) {
+      console.warn('[Browser Use Cloud] No output data in result');
+      console.log('[Browser Use Cloud] Full result:', JSON.stringify(result).substring(0, 500));
       return [];
     }
     
-    if (typeof result.output === 'string') {
+    // Parse the output
+    let rawTrends = [];
+    
+    if (typeof outputData === 'string') {
       try {
-        rawTrends = JSON.parse(result.output);
+        rawTrends = JSON.parse(outputData);
       } catch (e) {
         console.error('[Browser Use Cloud] Failed to parse output:', e.message);
+        console.log('[Browser Use Cloud] Raw output:', outputData.substring(0, 200));
         return [];
       }
-    } else if (Array.isArray(result.output)) {
-      rawTrends = result.output;
+    } else if (Array.isArray(outputData)) {
+      rawTrends = outputData;
+    } else if (typeof outputData === 'object') {
+      // Output might be already parsed object
+      rawTrends = [outputData];
     }
     
     console.log(`[Browser Use Cloud] Received ${rawTrends.length} raw trends`);
