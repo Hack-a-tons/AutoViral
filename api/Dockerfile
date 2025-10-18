@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
+
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -18,6 +21,10 @@ COPY src ./src
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 
+# Initialize database on startup
+RUN echo '#!/bin/sh\nnpx prisma db push --skip-generate\nnpm start' > /app/start.sh && \
+    chmod +x /app/start.sh
+
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["/app/start.sh"]
