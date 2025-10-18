@@ -1,8 +1,6 @@
 # AutoViral Docker Compose Configuration
 # All ports and credentials come from .env file
 
-version: '3.8'
-
 services:
   api:
     build:
@@ -13,7 +11,8 @@ services:
       - "${API_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - DB_URL=${DB_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=3000
       - AUTH_BEARER_KEY=${AUTH_BEARER_KEY}
       - LLM_PROVIDER=${LLM_PROVIDER}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -29,9 +28,6 @@ services:
       - ./data:/app/data
       - ./media:/app/media
     restart: unless-stopped
-    depends_on:
-      - db
-      - redis
     networks:
       - autoviral-network
 
@@ -44,7 +40,9 @@ services:
       - "${WORKER_PORT:-7000}:3001"
     environment:
       - NODE_ENV=production
-      - DB_URL=${DB_URL}
+      - API_URL=${API_URL}
+      - AUTH_BEARER_KEY=${AUTH_BEARER_KEY}
+      - DISCOVERY_INTERVAL_MINUTES=${DISCOVERY_INTERVAL_MINUTES}
       - LLM_PROVIDER=${LLM_PROVIDER}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -59,41 +57,8 @@ services:
       - ./data:/app/data
       - ./media:/app/media
     restart: unless-stopped
-    depends_on:
-      - db
-      - redis
     networks:
       - autoviral-network
-
-  db:
-    image: postgres:16-alpine
-    container_name: autoviral-db
-    ports:
-      - "${DB_PORT:-21000}:5432"
-    environment:
-      - POSTGRES_DB=autoviral
-      - POSTGRES_USER=autoviral
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - autoviral-network
-
-  redis:
-    image: redis:7-alpine
-    container_name: autoviral-redis
-    ports:
-      - "${REDIS_PORT:-22000}:6379"
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    networks:
-      - autoviral-network
-
-volumes:
-  postgres-data:
-  redis-data:
 
 networks:
   autoviral-network:
