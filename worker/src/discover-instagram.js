@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
-import { BrowserUseClient } from 'browser-use-sdk';
 
 dotenv.config();
 
@@ -46,8 +45,9 @@ async function discoverInstagramTrends() {
 }
 
 /**
- * Use Browser Use Cloud SDK to scrape Instagram trends
+ * Use Browser Use Cloud API to scrape Instagram trends
  * Browser Use Cloud is a managed service - no Daytona setup needed!
+ * Using REST API directly since SDK has import issues
  */
 async function scrapeInstagramWithBrowserUse() {
   console.log('[Browser Use Cloud] Starting Instagram discovery...');
@@ -58,25 +58,20 @@ async function scrapeInstagramWithBrowserUse() {
   }
   
   try {
-    // Initialize Browser Use Cloud client
-    const client = new BrowserUseClient({
-      apiKey: BROWSER_USE_API_KEY
-    });
+    console.log('[Browser Use Cloud] Creating browser task via API...');
     
-    console.log('[Browser Use Cloud] Creating browser task...');
-    
-    // Create task to scrape Instagram trends
-    const task = await client.tasks.createTask({
+    // Create task using Browser Use Cloud REST API
+    const createResponse = await axios.post('https://api.browser-use.com/v1/tasks', {
       task: `Go to Instagram explore page (instagram.com/explore). 
              If login is required, use username: ${INSTAGRAM_USERNAME} and password: ${INSTAGRAM_PASSWORD}.
              Extract the top 10 trending hashtags currently showing.
              For each trending hashtag, collect:
              1. Hashtag name (including #)
-             2. Approximate post count
+             2. Approximate post count  
              3. Engagement indicators (likes, comments visible)
              Return as a JSON array with format: 
              [{"hashtag": "#example", "postCount": 15000, "engagement": "high"}]`,
-      resultSchema: {
+      result_schema: {
         type: 'array',
         items: {
           type: 'object',
@@ -87,23 +82,55 @@ async function scrapeInstagramWithBrowserUse() {
           }
         }
       }
+    }, {
+      headers: {
+        'Authorization': `Bearer ${BROWSER_USE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
     
-    console.log(`[Browser Use Cloud] Task created: ${task.id}`);
+    const taskId = createResponse.data.id;
+    console.log(`[Browser Use Cloud] Task created: ${taskId}`);
     console.log('[Browser Use Cloud] Waiting for completion...');
     
-    // Wait for task to complete
-    const result = await task.complete();
+    // Poll for task completion (max 2 minutes)
+    let attempts = 0;
+    const maxAttempts = 24; // 24 * 5 = 120 seconds
+    let result = null;
     
-    if (!result || !result.output) {
-      console.warn('[Browser Use Cloud] No data returned');
-      return [];
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      
+      const statusResponse = await axios.get(`https://api.browser-use.com/v1/tasks/${taskId}`, {
+        headers: {
+          'Authorization': `Bearer ${BROWSER_USE_API_KEY}`
+        }
+      });
+      
+      if (statusResponse.data.status === 'completed') {
+        result = statusResponse.data;
+        break;
+      } else if (statusResponse.data.status === 'failed') {
+        throw new Error(`Task failed: ${statusResponse.data.error || 'Unknown error'}`);
+      }
+      
+      attempts++;
+      console.log(`[Browser Use Cloud] Task status: ${statusResponse.data.status} (${attempts}/${maxAttempts})`);
+    }
+    
+    if (!result) {
+      throw new Error('Task timeout after 2 minutes');
     }
     
     console.log(`[Browser Use Cloud] Task completed successfully`);
     
     // Parse the output
     let rawTrends = [];
+    if (!result.output) {
+      console.warn('[Browser Use Cloud] No output data');
+      return [];
+    }
+    
     if (typeof result.output === 'string') {
       try {
         rawTrends = JSON.parse(result.output);
@@ -149,7 +176,7 @@ async function scrapeInstagramWithBrowserUse() {
   } catch (error) {
     console.error('[Browser Use Cloud] Error:', error.message);
     if (error.response) {
-      console.error('[Browser Use Cloud] Response:', error.response.status, error.response.data);
+      console.error('[Browser Use Cloud] Response:', error.response.status, JSON.stringify(error.response.data));
     }
     
     // Return empty array on error - worker will retry on next cycle
