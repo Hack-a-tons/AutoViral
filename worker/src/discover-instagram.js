@@ -61,7 +61,8 @@ async function scrapeInstagramWithBrowserUse() {
     console.log('[Browser Use Cloud] Creating browser task via API...');
     
     // Create task using Browser Use Cloud REST API
-    const createResponse = await axios.post('https://api.browser-use.com/v1/tasks', {
+    // Correct endpoint: /api/v1/run-task (not /v1/tasks)
+    const createResponse = await axios.post('https://api.browser-use.com/api/v1/run-task', {
       task: `Go to Instagram explore page (instagram.com/explore). 
              If login is required, use username: ${INSTAGRAM_USERNAME} and password: ${INSTAGRAM_PASSWORD}.
              Extract the top 10 trending hashtags currently showing.
@@ -89,37 +90,44 @@ async function scrapeInstagramWithBrowserUse() {
       }
     });
     
-    const taskId = createResponse.data.id;
+    const taskId = createResponse.data.task_id;
     console.log(`[Browser Use Cloud] Task created: ${taskId}`);
+    console.log(`[Browser Use Cloud] Status: ${createResponse.data.status}`);
+    if (createResponse.data.live_url) {
+      console.log(`[Browser Use Cloud] Live preview: ${createResponse.data.live_url}`);
+    }
     console.log('[Browser Use Cloud] Waiting for completion...');
     
-    // Poll for task completion (max 2 minutes)
+    // Poll for task completion (max 3 minutes for Instagram login + scraping)
     let attempts = 0;
-    const maxAttempts = 24; // 24 * 5 = 120 seconds
+    const maxAttempts = 36; // 36 * 5 = 180 seconds (3 minutes)
     let result = null;
     
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
       
-      const statusResponse = await axios.get(`https://api.browser-use.com/v1/tasks/${taskId}`, {
+      // Get task status - endpoint: /api/v1/get-task-status
+      const statusResponse = await axios.get(`https://api.browser-use.com/api/v1/task/${taskId}`, {
         headers: {
           'Authorization': `Bearer ${BROWSER_USE_API_KEY}`
         }
       });
       
-      if (statusResponse.data.status === 'completed') {
+      const status = statusResponse.data.status;
+      
+      if (status === 'completed' || status === 'done' || status === 'success') {
         result = statusResponse.data;
         break;
-      } else if (statusResponse.data.status === 'failed') {
-        throw new Error(`Task failed: ${statusResponse.data.error || 'Unknown error'}`);
+      } else if (status === 'failed' || status === 'error') {
+        throw new Error(`Task failed: ${statusResponse.data.error || statusResponse.data.message || 'Unknown error'}`);
       }
       
       attempts++;
-      console.log(`[Browser Use Cloud] Task status: ${statusResponse.data.status} (${attempts}/${maxAttempts})`);
+      console.log(`[Browser Use Cloud] Task status: ${status} (${attempts}/${maxAttempts})`);
     }
     
     if (!result) {
-      throw new Error('Task timeout after 2 minutes');
+      throw new Error('Task timeout after 3 minutes');
     }
     
     console.log(`[Browser Use Cloud] Task completed successfully`);
