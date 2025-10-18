@@ -13,25 +13,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Bearer token auth middleware
+// Bearer token auth middleware (disabled for public access)
 const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const bearerKey = process.env.AUTH_BEARER_KEY;
-  
-  if (!bearerKey) {
-    // If no key configured, allow access (dev mode)
-    return next();
-  }
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid authorization header' });
-  }
-  
-  const token = authHeader.substring(7);
-  if (token !== bearerKey) {
-    return res.status(401).json({ error: 'Invalid bearer token' });
-  }
-  
+  // Public API - no authentication required
   next();
 };
 
