@@ -4,10 +4,25 @@
 
 ## Phase 0 — Repo & Scaffolding (0.5d)
 
+### Environment & Deployment Setup ✓
+* [x] Create `.env.example` with all required variables
+* [x] Configure `.gitignore` for security (env files, credentials, generated media)
+* [x] Create `daytona.yaml` workspace configuration
+* [x] Create deployment scripts (`scripts/deploy.sh`, `scripts/sandbox-cleanup.sh`, `scripts/sandbox-status.sh`)
+* [x] Add help (`-h`/`--help`) to all scripts
+* [x] Scripts work from any directory (use `#!/usr/bin/env bash` and resolve `.env` path correctly)
+* [x] Updated for Daytona CLI v0.111.0 compatibility (`daytona sandbox` commands, `daytona login`)
+* [x] Install Daytona CLI on macOS (`daytona-darwin-arm64` binary)
+* [x] Create `docs/` folder with `DEPLOYMENT.md`
+* [x] Update README.md with Quick Start guide
+
+### Application Scaffolding (TODO)
 * [ ] Init Node/TS project; add `compose.yml`
-* [ ] Create folders: `api/`, `worker/`, `media/`, `prompts/`, `scripts/`, `docs/`
+* [ ] Create folders: `api/`, `worker/`, `media/`, `prompts/`
 * [ ] Add DB (SQLite via Prisma/Drizzle). Migrate schemas for trends/generations/posts/metrics/settings/lists.
 * **Deliverable:** `GET /health` returns OK. DB file exists.
+
+**Note:** Install Daytona CLI before deploying: `brew install daytona` (see README Quick Start)
 
 ## Phase 1 — Monitoring: Trend Discovery (speed > volume)
 

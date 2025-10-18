@@ -1,0 +1,173 @@
+# Daytona Workspace Configuration for AutoViral
+name: autoviral
+description: Fully-automated trend-to-content-to-post-to-monetize engine
+
+# Base image for workspaces
+image: mcr.microsoft.com/playwright:v1.47.2-jammy
+
+# Workspace configuration
+workspace:
+  # Git repository
+  git:
+    enabled: true
+    branch: main
+  
+  # Ports to expose
+  ports:
+    - port: 3000
+      protocol: http
+      name: api
+      public: true
+    - port: 3001
+      protocol: http
+      name: worker
+      public: false
+  
+  # Resource limits
+  resources:
+    cpu: "2"
+    memory: "4Gi"
+    storage: "20Gi"
+  
+  # Environment setup
+  setup:
+    - name: Install dependencies
+      command: |
+        apt-get update
+        apt-get install -y ffmpeg jq curl git
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt-get install -y nodejs
+    
+    - name: Install Node packages
+      command: |
+        cd /workspace
+        npm install
+    
+    - name: Setup database
+      command: |
+        cd /workspace
+        mkdir -p data
+        npm run db:migrate || echo "Database migration will run on first start"
+  
+  # Health check
+  healthcheck:
+    http:
+      path: /health
+      port: 3000
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  
+  # Startup command
+  start:
+    command: |
+      cd /workspace
+      npm run start:prod
+
+# Worker sandbox templates
+worker_templates:
+  discovery:
+    name: discovery
+    resources:
+      cpu: "1"
+      memory: "2Gi"
+      storage: "5Gi"
+    image: mcr.microsoft.com/playwright:v1.47.2-jammy
+    lifetime: 30m
+    
+  generation:
+    name: gen
+    resources:
+      cpu: "2"
+      memory: "4Gi"
+      storage: "10Gi"
+    image: mcr.microsoft.com/playwright:v1.47.2-jammy
+    lifetime: 30m
+    
+  posting:
+    name: post
+    resources:
+      cpu: "1"
+      memory: "2Gi"
+      storage: "5Gi"
+    image: mcr.microsoft.com/playwright:v1.47.2-jammy
+    lifetime: 30m
+
+# Environment variables (loaded from .env)
+env:
+  - name: NODE_ENV
+    value: production
+  - name: TZ
+    value: UTC
+  - name: DISPLAY
+    value: ":99"
+  - name: PUPPETEER_DISABLE_HEADLESS_WARNING
+    value: "true"
+  # Other env vars loaded from .env file during deployment
+
+# Pre-installed tools
+tools:
+  - name: ffmpeg
+    version: latest
+  - name: playwright
+    version: "1.47.2"
+  - name: jq
+    version: latest
+  - name: git
+    version: latest
+
+# Volume mounts
+volumes:
+  - name: data
+    path: /workspace/data
+    size: 10Gi
+  - name: media
+    path: /workspace/media
+    size: 20Gi
+  - name: tmp
+    path: /workspace/tmp
+    size: 5Gi
+    ephemeral: true
+
+# Networking
+network:
+  # Allow communication between control plane and workers
+  internal: true
+  # Allow external access to API
+  external: true
+
+# Auto-cleanup configuration
+cleanup:
+  enabled: true
+  # Delete ephemeral workers after lifetime
+  ephemeral_workers:
+    after: 30m
+  # Keep logs for debugging
+  logs:
+    retain: 7d
+
+# Monitoring
+monitoring:
+  enabled: true
+  metrics:
+    - cpu
+    - memory
+    - network
+    - disk
+  logs:
+    level: info
+    format: json
+
+# Security
+security:
+  # Isolate worker sandboxes
+  isolation: strong
+  # Network policies
+  network_policies:
+    - allow_internal
+    - allow_external_https
+  # Resource quotas
+  quotas:
+    max_sandboxes: 20
+    max_cpu_per_sandbox: "2"
+    max_memory_per_sandbox: "4Gi"

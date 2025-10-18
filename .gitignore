@@ -1,0 +1,57 @@
+# Environment variables
+.env
+.env.local
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+data/
+
+# Media files (generated)
+/tmp/
+/media/generated/
+*.mp4
+*.mov
+*.avi
+*.webm
+*.mp3
+*.wav
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+docker-compose.override.yml
+
+# Credentials (never commit these)
+credentials/
+secrets/
+*.pem
+*.key
+*.crt
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

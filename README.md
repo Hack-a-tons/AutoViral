@@ -14,6 +14,76 @@
 
 ---
 
+## Quick Start
+
+### Prerequisites
+
+1. **Install Daytona CLI v0.111.0+** (macOS):
+   ```bash
+   # Download the binary
+   curl -L -o daytona-darwin-arm64 https://download.daytona.io/daytona/latest/daytona-darwin-arm64
+   chmod +x daytona-darwin-arm64
+   sudo mv daytona-darwin-arm64 /usr/local/bin/daytona
+   
+   # Verify installation
+   daytona --version
+   ```
+   
+   **Note:** If you already have the binary in `~/Downloads/daytona-darwin-arm64`, just run:
+   ```bash
+   chmod +x ~/Downloads/daytona-darwin-arm64
+   sudo mv ~/Downloads/daytona-darwin-arm64 /usr/local/bin/daytona
+   ```
+   
+   Or see [installation guide](https://www.daytona.io/docs/installation/daytona-cli/) for other methods.
+
+2. **Other requirements:**
+   - Git repository set up with remote origin
+   - API keys for OpenAI/Gemini/Claude, BrowserUse, Pexels
+
+### Setup
+
+1. **Clone and configure environment**
+   ```bash
+   git clone <your-repo-url>
+   cd AutoViral
+   cp .env.example .env
+   # Edit .env with your actual API keys
+   ```
+
+2. **Deploy to Daytona**
+   ```bash
+   # Deploy to production
+   ./scripts/deploy.sh --prod
+   
+   # Or deploy to dev environment
+   ./scripts/deploy.sh --dev
+   
+   # With commit message
+   ./scripts/deploy.sh --prod -m "Initial deployment"
+   ```
+
+3. **Monitor sandboxes**
+   ```bash
+   # View current status
+   ./scripts/sandbox-status.sh
+   
+   # Watch mode (continuous updates)
+   ./scripts/sandbox-status.sh --watch
+   ```
+
+4. **Cleanup old workers**
+   ```bash
+   # Remove sandboxes older than 30 minutes
+   ./scripts/sandbox-cleanup.sh
+   ```
+
+💡 **All scripts support `--help` flag** for detailed usage information.
+
+📖 **Full deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+---
+
 ## Architecture
 
 ```
@@ -121,9 +191,34 @@ Switch provider with env or `/settings` (e.g., `{"llm_provider":"openai"}`).
 
 ## Daytona orchestration
 
-* **One control plane workspace**: API + DB + scheduler + dashboards.
-* **Ephemeral sandboxes**: spun up per job type (discovery/gen/post). Each comes with required tools (BrowserUse/Playwright + ffmpeg). Control plane talks to Daytona API/CLI to create/delete.
-* **State lives only in control plane** (sandboxes are stateless; artifacts pushed back via webhook or S3‑like storage).
+### Sandbox Management
+
+* **Control plane workspaces** (persistent):
+  - `autoviral-control-prod` — Production instance
+  - `autoviral-control-dev` — Development instance
+  - Contains: API + DB + scheduler + dashboards
+  - **Only 2 control plane sandboxes run at a time**
+
+* **Ephemeral worker sandboxes** (auto-managed):
+  - `discovery-<id>` — Trend scraping (BrowserUse + APIs)
+  - `gen-<id>` — Content generation (LLM + ffmpeg)
+  - `post-<id>` — Platform posting (BrowserUse)
+  - Auto-created on demand
+  - **Auto-deleted after `MAX_SANDBOX_LIFETIME_MINUTES` (default: 30)**
+  - All tools pre-installed (BrowserUse, Playwright, ffmpeg)
+
+* **State management**:
+  - State lives only in control plane (DB)
+  - Worker sandboxes are stateless
+  - Artifacts pushed back via webhook
+  - `.env` file copied to each sandbox during deployment
+
+* **Deployment strategy**:
+  - Deploy script creates new sandbox (dev or prod)
+  - Health check validates deployment
+  - Old sandbox kept as backup during deploy
+  - Failed deploys trigger automatic rollback
+  - See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for details
 
 ---
 
@@ -145,6 +240,23 @@ Switch provider with env or `/settings` (e.g., `{"llm_provider":"openai"}`).
 
 ## Environment & compose
 
+### Environment Configuration
+
+**All sensitive values (API keys, tokens, credentials) must be stored in `.env` file — never hardcoded.**
+
+1. Copy `.env.example` to `.env`
+2. Fill in your actual values
+3. `.env` is gitignored for security
+
+**Required variables in `.env`:**
+- `DAYTONA_API_KEY`, `DAYTONA_API_URL` — Daytona access
+- `BROWSER_USE_API_KEY` — BrowserUse automation
+- `OPENAI_API_KEY`, `GEMINI_API_KEY`, `CLAUDE_API_KEY` — LLM providers
+- `PEXELS_API_KEY` — Royalty-free media
+- `GALILEO_AI_API_KEY` — Optional prompt evaluation
+- `AUTH_BEARER_KEY` — API security
+- Platform credentials (X, Reddit, Instagram, etc.)
+
 **compose.yml** (sketch):
 
 ```yaml
@@ -155,25 +267,25 @@ services:
     working_dir: /app
     volumes: ["./:/app"]
     command: sh -lc "npm i && npm run dev"
-    ports: ["3000:3000"]
+    ports: ["${EXTERNAL_API_PORT:-3000}:3000"]
+    env_file: .env
     environment:
-      - DB_URL=sqlite:./data/auto.db
-      - AUTH_BEARER_KEY=changeme
-      - LLM_PROVIDER=openai
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
-      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      - DB_URL=${DB_URL}
+      - AUTH_BEARER_KEY=${AUTH_BEARER_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+  
   worker-base:
     image: mcr.microsoft.com/playwright:v1.47.2-jammy
     working_dir: /app
     volumes: ["./:/app"]
     shm_size: 1g
+    env_file: .env
     environment:
       - DISPLAY=:99
       - TZ=UTC
-      - PUPPETEER_DISABLE_HEADLESS_WARNING=true
 ```
+
+All environment variables are loaded from `.env` via `env_file` directive.
 
 ---
 
