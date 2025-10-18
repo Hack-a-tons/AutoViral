@@ -10,16 +10,21 @@ datasource db {
 }
 
 model Trend {
-  id          String   @id @default(uuid())
-  keyword     String
-  source      String   // "instagram", "x", "reddit"
-  status      String   @default("discovering") // discovering|selected|blocked|stopped
-  score       Float    @default(0.0)
-  reason      String?  // Why it was selected/blocked
-  metadata    String?  // JSON string for extra data (hashtags, engagement, etc.)
-  discoveredAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(uuid())
+  keyword       String
+  source        String   // "instagram", "x", "reddit"
+  status        String   @default("discovering") // discovering|selected|blocked|stopped
+  score         Float    @default(0.0)
+  reason        String?  // Why it was selected/blocked
+  metadata      String?  // JSON string for extra data (hashtags, engagement, etc.)
+  thumbnailUrl  String?  // Main thumbnail image for the trend
+  media         String?  // JSON string for media URLs (images, videos)
+  examplePosts  String?  // JSON string for example posts array
+  platformData  String?  // JSON string for platform-specific data
+  analysis      String?  // JSON string for AI-powered analysis
+  discoveredAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([status, discoveredAt])
   @@index([source])

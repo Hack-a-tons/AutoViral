@@ -56,15 +56,19 @@ app.get('/trends', authMiddleware, async (req, res) => {
       take: parseInt(limit)
     });
     
-    // Parse metadata JSON
-    const trendsWithMetadata = trends.map(t => ({
+    // Parse JSON fields
+    const trendsWithParsedData = trends.map(t => ({
       ...t,
-      metadata: t.metadata ? JSON.parse(t.metadata) : null
+      metadata: t.metadata ? JSON.parse(t.metadata) : null,
+      media: t.media ? JSON.parse(t.media) : null,
+      examplePosts: t.examplePosts ? JSON.parse(t.examplePosts) : null,
+      platformData: t.platformData ? JSON.parse(t.platformData) : null,
+      analysis: t.analysis ? JSON.parse(t.analysis) : null
     }));
     
     res.json({
       count: trends.length,
-      trends: trendsWithMetadata
+      trends: trendsWithParsedData
     });
   } catch (error) {
     console.error('Error fetching trends:', error);
@@ -85,7 +89,11 @@ app.get('/trends/:id', authMiddleware, async (req, res) => {
     
     res.json({
       ...trend,
-      metadata: trend.metadata ? JSON.parse(trend.metadata) : null
+      metadata: trend.metadata ? JSON.parse(trend.metadata) : null,
+      media: trend.media ? JSON.parse(trend.media) : null,
+      examplePosts: trend.examplePosts ? JSON.parse(trend.examplePosts) : null,
+      platformData: trend.platformData ? JSON.parse(trend.platformData) : null,
+      analysis: trend.analysis ? JSON.parse(trend.analysis) : null
     });
   } catch (error) {
     console.error('Error fetching trend:', error);
@@ -96,7 +104,10 @@ app.get('/trends/:id', authMiddleware, async (req, res) => {
 // Webhook to receive new trends from discovery worker
 app.post('/webhook/trend', authMiddleware, async (req, res) => {
   try {
-    const { keyword, source, score, reason, metadata } = req.body;
+    const { 
+      keyword, source, score, reason, metadata,
+      thumbnailUrl, media, examplePosts, platformData, analysis
+    } = req.body;
     
     if (!keyword || !source) {
       return res.status(400).json({ error: 'keyword and source are required' });
@@ -116,7 +127,7 @@ app.post('/webhook/trend', authMiddleware, async (req, res) => {
       return res.json({ message: 'Duplicate trend (already exists)', id: existing.id });
     }
     
-    // Create new trend
+    // Create new trend with enhanced data
     const trend = await prisma.trend.create({
       data: {
         keyword,
@@ -124,6 +135,11 @@ app.post('/webhook/trend', authMiddleware, async (req, res) => {
         score: score || 0.0,
         reason: reason || null,
         metadata: metadata ? JSON.stringify(metadata) : null,
+        thumbnailUrl: thumbnailUrl || null,
+        media: media ? JSON.stringify(media) : null,
+        examplePosts: examplePosts ? JSON.stringify(examplePosts) : null,
+        platformData: platformData ? JSON.stringify(platformData) : null,
+        analysis: analysis ? JSON.stringify(analysis) : null,
         discoveredAt: new Date()
       }
     });
