@@ -46,71 +46,124 @@ async function discoverInstagramTrends() {
 
 /**
  * Use Browser Use API to scrape Instagram trends
- * This is a placeholder - you'll implement the actual Browser Use integration
+ * Direct API integration using axios
  */
 async function scrapeInstagramWithBrowserUse() {
-  // For now, we'll create a simple implementation
-  // In production, you'd use the Browser Use SDK to:
-  // - Create a Daytona sandbox
-  // - Run Playwright/Puppeteer to navigate Instagram
-  // - Extract trending content
+  console.log('[Browser Use] Starting real Instagram discovery...');
   
-  console.log('[Browser Use] Analyzing Instagram explore page...');
+  if (!BROWSER_USE_API_KEY) {
+    console.error('[Browser Use] API key not configured');
+    return [];
+  }
   
-  // Simulate discovery for now - you'll replace this with actual Browser Use calls
-  const mockTrends = [
-    {
-      keyword: '#AITrends',
-      source: 'instagram',
-      score: 95.0,
-      reason: 'High velocity growth in last hour',
-      metadata: {
-        postCount: 15000,
-        engagement: 'high',
-        velocity: 'fast',
-        recentPosts: 1250,
-        hashtags: ['#AI', '#Technology', '#Innovation']
+  try {
+    // Call Browser Use API to scrape Instagram
+    console.log('[Browser Use] Creating task for Instagram explore...');
+    
+    const response = await axios.post('https://api.browseruse.com/v1/execute', {
+      task: `Navigate to Instagram explore page and extract trending hashtags. 
+             For each trending hashtag, get: 
+             1. Hashtag name
+             2. Post count
+             3. Recent activity indicators
+             4. Engagement level (likes, comments)
+             Return as JSON array with fields: hashtag, postCount, recentPosts, engagement`,
+      browser: 'chromium',
+      headless: true,
+      credentials: {
+        instagram: {
+          username: INSTAGRAM_USERNAME,
+          password: INSTAGRAM_PASSWORD
+        }
+      },
+      timeout: 60000
+    }, {
+      headers: {
+        'Authorization': `Bearer ${BROWSER_USE_API_KEY}`,
+        'Content-Type': 'application/json'
       }
-    },
-    {
-      keyword: '#TechNews2025',
-      source: 'instagram',
-      score: 88.0,
-      reason: 'Rapid engagement increase',
-      metadata: {
-        postCount: 8500,
-        engagement: 'very-high',
-        velocity: 'very-fast',
-        recentPosts: 890,
-        hashtags: ['#Tech', '#News', '#2025']
-      }
+    });
+    
+    if (!response.data || !response.data.result) {
+      console.warn('[Browser Use] No data returned from API');
+      return [];
     }
-  ];
-  
-  // In production, uncomment and implement:
-  /*
-  const browserUse = require('@daytona-ai/browser-use');
-  
-  const result = await browserUse.run({
-    apiKey: BROWSER_USE_API_KEY,
-    task: 'Navigate to Instagram explore page and extract trending hashtags with their engagement metrics',
-    credentials: {
-      instagram: {
-        username: INSTAGRAM_USERNAME,
-        password: INSTAGRAM_PASSWORD
-      }
-    },
-    selectors: {
-      trendingHashtags: 'a[href*="/explore/tags/"]',
-      postCounts: '.post-count',
-      engagement: '.engagement-metrics'
+    
+    console.log(`[Browser Use] Received ${response.data.result.length} raw trends`);
+    
+    // Transform Browser Use results into our trend format
+    const trends = response.data.result
+      .filter(item => item.hashtag && item.postCount)
+      .slice(0, 10) // Top 10 trends
+      .map(item => {
+        const postCount = parseInt(item.postCount) || 0;
+        const recentPosts = parseInt(item.recentPosts) || Math.floor(postCount * 0.1);
+        const velocity = calculateVelocity(postCount, recentPosts);
+        const score = calculateScore(velocity, item.engagement);
+        
+        return {
+          keyword: item.hashtag.startsWith('#') ? item.hashtag : `#${item.hashtag}`,
+          source: 'instagram',
+          score: score,
+          reason: `${velocity} velocity with ${item.engagement || 'moderate'} engagement`,
+          metadata: {
+            postCount: postCount,
+            engagement: item.engagement || 'moderate',
+            velocity: velocity,
+            recentPosts: recentPosts,
+            hashtags: [item.hashtag]
+          }
+        };
+      });
+    
+    console.log(`[Browser Use] Processed ${trends.length} trends`);
+    return trends;
+    
+  } catch (error) {
+    console.error('[Browser Use] Error:', error.message);
+    if (error.response) {
+      console.error('[Browser Use] API Response:', error.response.status, error.response.data);
     }
-  });
+    
+    // Return empty array on error - worker will retry on next cycle
+    return [];
+  }
+}
+
+/**
+ * Calculate velocity based on post metrics
+ */
+function calculateVelocity(totalPosts, recentPosts) {
+  const ratio = recentPosts / totalPosts;
+  if (ratio > 0.15) return 'very-fast';
+  if (ratio > 0.10) return 'fast';
+  if (ratio > 0.05) return 'moderate';
+  return 'slow';
+}
+
+/**
+ * Calculate trend score (0-100)
+ */
+function calculateScore(velocity, engagement) {
+  let score = 50; // Base score
   
-  return result.trends;
-  */
+  // Velocity contribution (40 points)
+  switch (velocity) {
+    case 'very-fast': score += 40; break;
+    case 'fast': score += 30; break;
+    case 'moderate': score += 20; break;
+    case 'slow': score += 10; break;
+  }
   
-  return mockTrends;
+  // Engagement contribution (10 points)
+  switch (engagement) {
+    case 'very-high': score += 10; break;
+    case 'high': score += 7; break;
+    case 'moderate': score += 5; break;
+    default: score += 2;
+  }
+  
+  return Math.min(100, Math.max(0, score));
 }
 
 /**
