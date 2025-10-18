@@ -2,6 +2,15 @@
 
 This directory contains operational scripts for deploying and managing AutoViral on Daytona.
 
+## Quick Reference
+
+| Script | Purpose | Example |
+|--------|---------|---------|
+| `deploy.sh` | Deploy to Daytona (auto commit/push) | `./scripts/deploy.sh --dev` |
+| `sandbox-status.sh` | View all sandboxes | `./scripts/sandbox-status.sh` |
+| `sandbox-cleanup.sh` | Clean old worker sandboxes | `./scripts/sandbox-cleanup.sh --dry-run` |
+| `sandbox-logs.sh` | Access sandbox terminal & logs | `./scripts/sandbox-logs.sh autoviral-control-dev` |
+
 ## Available Scripts
 
 ### 🚀 deploy.sh
@@ -69,6 +78,56 @@ Cleanup script for ephemeral worker sandboxes.
 - Scheduled cleanup (cron job every hour)
 - Manual cleanup when too many sandboxes exist
 - Emergency cleanup to free resources
+
+---
+
+### 📋 sandbox-logs.sh
+
+Access sandbox web terminal to view logs and run commands.
+
+**Usage:**
+```bash
+# Open prod sandbox terminal (default)
+./scripts/sandbox-logs.sh
+
+# Open dev sandbox terminal
+./scripts/sandbox-logs.sh autoviral-control-dev
+
+# Open by sandbox ID
+./scripts/sandbox-logs.sh 6615a692-f278-4d2f
+```
+
+**Features:**
+- Opens sandbox web terminal in browser
+- Shows sandbox URL and status
+- Provides common log commands
+- Works with sandbox name or ID
+
+**Common commands inside sandbox:**
+```bash
+# Navigate to workspace
+cd /workspace
+
+# View docker-compose logs (once services are running)
+docker compose logs -f              # All services
+docker compose logs -f api          # API only
+docker compose logs --tail=100      # Last 100 lines
+
+# View Node.js app logs (if running directly)
+npm run dev                         # Logs show in terminal
+
+# Check processes
+ps aux | grep node
+
+# Follow a log file
+tail -f logs/app.log
+```
+
+**When to use:**
+- View application logs in real-time
+- Debug issues in sandbox
+- Run commands in sandbox environment
+- Monitor service health
 
 ---
 

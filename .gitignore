@@ -55,3 +55,8 @@ secrets/
 *.tmp
 *.temp
 .cache/
+
+# Backup files
+*.bak
+*.old
+*~

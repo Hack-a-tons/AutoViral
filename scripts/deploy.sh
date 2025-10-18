@@ -2,7 +2,7 @@
 
 set -e
 
-# Change to script directory to ensure relative paths work
+# Change to script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -11,6 +11,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Project root is parent of scripts directory
@@ -21,45 +22,49 @@ show_help() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Deploy AutoViral to Daytona sandbox (prod or dev environment).
-This script will ALWAYS commit and push all changes before deploying.
+Deploy AutoViral to remote server via SSH.
+This script will commit, push, and deploy to ${SERVER_HOST}.
 
 Options:
     -m, --message TEXT    Custom commit message (default: auto-generated)
-    --dev                 Deploy to development environment (default: prod)
-    --prod                Deploy to production environment
     -h, --help            Show this help message and exit
+    --skip-build          Skip docker compose build step
+    --logs                Show logs after deployment
 
 Examples:
-    $0 --prod                              # Deploy to prod with auto message
-    $0 --dev                               # Deploy to dev with auto message
-    $0 --prod -m "New feature"             # Deploy with custom message
+    $0                              # Deploy with auto commit message
+    $0 -m "New feature"             # Deploy with custom message
+    $0 --skip-build                 # Deploy without rebuilding images
+    $0 --logs                       # Deploy and show logs
 
 What it does:
     1. Stage all changes (git add .)
     2. Commit with message (--allow-empty for re-deploys)
     3. Push to remote origin
-    4. Create/update Daytona sandbox
-    5. Generate sandbox-setup.sh script
-    6. Display setup instructions
+    4. Copy .env to server
+    5. SSH to server and:
+       - git pull
+       - docker compose build
+       - docker compose up -d
+    6. Display deployment status
 
 Prerequisites:
-    - .env file must exist with required variables
-    - Daytona CLI must be installed
+    - .env file must exist with SERVER_HOST configured
+    - SSH access to server without password (SSH keys)
     - Git repository with remote origin configured
-    - All changes ready to commit
+    - Docker and docker compose on server
 
 Environment Variables (from .env):
-    DAYTONA_API_KEY               Daytona authentication key
-    DAYTONA_API_URL               Daytona API endpoint
-    DAYTONA_CONTROL_PLANE_NAME    Production workspace name
-    DAYTONA_DEV_WORKSPACE         Development workspace name
+    SERVER_HOST          Remote server hostname
+    SERVER_PATH          Deployment directory on server
+
 EOF
 }
 
 # Default values
-ENVIRONMENT="prod"
 MESSAGE=""
+SKIP_BUILD=false
+SHOW_LOGS=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -72,69 +77,57 @@ while [[ $# -gt 0 ]]; do
             MESSAGE="$2"
             shift 2
             ;;
-        --dev)
-            ENVIRONMENT="dev"
+        --skip-build)
+            SKIP_BUILD=true
             shift
             ;;
-        --prod)
-            ENVIRONMENT="prod"
+        --logs)
+            SHOW_LOGS=true
             shift
             ;;
         *)
-            echo -e "${RED}Error: Unknown option: $1${NC}"
-            echo "Run '$0 --help' for usage information."
+            echo -e "${RED}Unknown option: $1${NC}"
+            show_help
             exit 1
             ;;
     esac
 done
 
-# Load environment variables
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a  # automatically export all variables
-    source "$PROJECT_ROOT/.env"
-    set +a
-else
+# Load environment variables from .env
+if [ ! -f "$PROJECT_ROOT/.env" ]; then
     echo -e "${RED}Error: .env file not found at $PROJECT_ROOT/.env${NC}"
-    echo -e "${YELLOW}Create it from .env.example: cp .env.example .env${NC}"
+    echo -e "${YELLOW}Copy from .env.example: cp .env.example .env${NC}"
     exit 1
 fi
+
+set -a
+source "$PROJECT_ROOT/.env"
+set +a
 
 # Validate required environment variables
-if [ -z "$DAYTONA_API_KEY" ]; then
-    echo -e "${RED}Error: DAYTONA_API_KEY not set in .env${NC}"
+if [ -z "$SERVER_HOST" ]; then
+    echo -e "${RED}Error: SERVER_HOST not set in .env${NC}"
     exit 1
 fi
 
-if [ -z "$DAYTONA_API_URL" ]; then
-    echo -e "${RED}Error: DAYTONA_API_URL not set in .env${NC}"
-    exit 1
-fi
-
-# Configuration based on environment
-if [ "$ENVIRONMENT" = "prod" ]; then
-    WORKSPACE_NAME="${DAYTONA_CONTROL_PLANE_NAME:-autoviral-control-prod}"
-    OLD_WORKSPACE="${DAYTONA_DEV_WORKSPACE:-autoviral-control-dev}"
-else
-    WORKSPACE_NAME="${DAYTONA_DEV_WORKSPACE:-autoviral-control-dev}"
-    OLD_WORKSPACE="${DAYTONA_CONTROL_PLANE_NAME:-autoviral-control-prod}"
-fi
+SERVER_PATH=${SERVER_PATH:-AutoViral}
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}  AutoViral Daytona Deployment Script${NC}"
-echo -e "${BLUE}  Environment: ${YELLOW}${ENVIRONMENT}${NC}"
-echo -e "${BLUE}  Target Workspace: ${YELLOW}${WORKSPACE_NAME}${NC}"
+echo -e "${BLUE}  AutoViral SSH Deployment Script${NC}"
+echo -e "${BLUE}  Target: ${YELLOW}${SERVER_HOST}:${SERVER_PATH}${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-# Step 1: Always commit and push changes
-echo -e "\n${GREEN}[1/7] Committing and pushing changes...${NC}"
+# Step 1: Commit and push changes
+echo -e "\n${GREEN}[1/5] Committing and pushing changes...${NC}"
 
 # Default message if not provided
 if [ -z "$MESSAGE" ]; then
-    MESSAGE="Deploy to ${ENVIRONMENT} - $(date +%Y-%m-%d\ %H:%M:%S)"
+    MESSAGE="Deploy - $(date +%Y-%m-%d\ %H:%M:%S)"
 fi
 
 # Stage all changes
 echo -e "${YELLOW}Staging changes...${NC}"
+cd "$PROJECT_ROOT"
 git add . || {
     echo -e "${RED}Failed to stage changes${NC}"
     exit 1
@@ -154,211 +147,77 @@ git push || {
 echo -e "${GREEN}✓ Changes pushed successfully${NC}"
 
 # Get repository URL
-GIT_REPO=$(cd "$PROJECT_ROOT" && git remote get-url origin 2>/dev/null)
-if [ -z "$GIT_REPO" ]; then
-    echo -e "${RED}Error: No git remote 'origin' found${NC}"
-    echo -e "${YELLOW}Add one with: git remote add origin <url>${NC}"
-    exit 1
-fi
+GIT_REPO=$(git remote get-url origin 2>/dev/null)
 echo -e "${CYAN}Repository: ${GIT_REPO}${NC}"
 
-# Step 2: Check Daytona CLI and authentication
-echo -e "\n${GREEN}[2/7] Checking Daytona CLI and authentication...${NC}"
-if ! command -v daytona &> /dev/null; then
-    echo -e "${RED}Error: Daytona CLI not found${NC}"
-    echo -e "${YELLOW}Install it with: brew install daytona${NC}"
-    echo -e "${YELLOW}Or see: https://www.daytona.io/docs/installation/daytona-cli/${NC}"
+# Step 2: Check SSH connectivity
+echo -e "\n${GREEN}[2/5] Checking SSH connectivity...${NC}"
+if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "${SERVER_HOST}" "exit" 2>/dev/null; then
+    echo -e "${RED}Error: Cannot connect to ${SERVER_HOST}${NC}"
+    echo -e "${YELLOW}Make sure SSH keys are configured${NC}"
+    echo -e "${YELLOW}Test with: ssh ${SERVER_HOST}${NC}"
     exit 1
 fi
+echo -e "${GREEN}✓ SSH connection successful${NC}"
 
-if ! daytona sandbox list &> /dev/null; then
-    echo -e "${YELLOW}Not authenticated. Logging in with API key from .env...${NC}"
-    daytona login --api-key "$DAYTONA_API_KEY" || {
-        echo -e "${RED}Authentication failed${NC}"
-        exit 1
-    }
+# Step 3: Copy .env file
+echo -e "\n${GREEN}[3/5] Copying .env to server...${NC}"
+scp "$PROJECT_ROOT/.env" "${SERVER_HOST}:${SERVER_PATH}/" || {
+    echo -e "${RED}Failed to copy .env file${NC}"
+    exit 1
+}
+echo -e "${GREEN}✓ .env copied successfully${NC}"
+
+# Step 4: Deploy on server
+echo -e "\n${GREEN}[4/5] Deploying on server...${NC}"
+
+# Build docker compose command
+DEPLOY_CMD="cd ${SERVER_PATH} && git pull"
+
+if [ "$SKIP_BUILD" = false ]; then
+    DEPLOY_CMD="${DEPLOY_CMD} && docker compose build"
 fi
 
-# Step 3: Create or update sandbox
-echo -e "\n${GREEN}[3/7] Setting up Daytona sandbox: ${WORKSPACE_NAME}...${NC}"
+DEPLOY_CMD="${DEPLOY_CMD} && docker compose up -d"
 
-# Check if sandbox exists by trying to get info
-SANDBOX_EXISTS=false
-if daytona sandbox info "$WORKSPACE_NAME" &> /dev/null; then
-    SANDBOX_EXISTS=true
-    SANDBOX_STATUS=$(daytona sandbox info "$WORKSPACE_NAME" | grep "State" | awk '{print $2}')
-    echo -e "${YELLOW}Sandbox exists with status: ${SANDBOX_STATUS}${NC}"
-    
-    if [ "$SANDBOX_STATUS" = "ERROR" ]; then
-        echo -e "${RED}Sandbox is in ERROR state. Deleting and recreating...${NC}"
-        daytona sandbox delete "$WORKSPACE_NAME" 2>/dev/null || true
-        SANDBOX_EXISTS=false
-    elif [ "$SANDBOX_STATUS" != "Running" ]; then
-        echo -e "${YELLOW}Starting sandbox...${NC}"
-        daytona sandbox start "$WORKSPACE_NAME" 2>/dev/null || {
-            echo -e "${RED}Failed to start. Deleting and recreating...${NC}"
-            daytona sandbox delete "$WORKSPACE_NAME" 2>/dev/null || true
-            SANDBOX_EXISTS=false
-        }
-    fi
-fi
+echo -e "${YELLOW}Running: ${DEPLOY_CMD}${NC}"
 
-if [ "$SANDBOX_EXISTS" = false ]; then
-    echo -e "${YELLOW}Creating new sandbox...${NC}"
-    echo -e "${YELLOW}Using default Daytona snapshot (daytonaio/sandbox:0.4.3)${NC}"
-    
-    #Note: Custom Dockerfiles cause "sandbox processing failed" errors in Daytona v0.111.0
-    # Use basic sandbox with default snapshot instead
-    daytona sandbox create --name "$WORKSPACE_NAME" \
-        --auto-stop 0 \
-        --public || {
-        echo -e "${RED}Failed to create sandbox${NC}"
-        exit 1
-    }
-    
-    echo -e "${GREEN}✓ Sandbox created successfully!${NC}"
-    SANDBOX_CREATED=true
-fi
-
-# Step 4: Generate setup script
-echo -e "\n${GREEN}[4/7] Generating setup script...${NC}"
-
-SETUP_SCRIPT="$PROJECT_ROOT/sandbox-setup.sh"
-cat > "$SETUP_SCRIPT" << 'SETUP_EOF'
-#!/bin/bash
-set -e
-
-echo "========================================"
-echo "AutoViral Sandbox Setup"
-echo "========================================"
-
-# Install Node.js 20.x
-echo "\n[1/6] Installing Node.js 20.x..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-sudo apt-get install -y nodejs
-node --version
-npm --version
-
-# Install system dependencies
-echo "\n[2/6] Installing system dependencies..."
-sudo apt-get update
-sudo apt-get install -y ffmpeg jq git curl
-
-# Clone repository
-echo "\n[3/6] Cloning repository..."
-rm -rf /workspace
-SETUP_EOF
-
-echo "git clone ${GIT_REPO} /workspace" >> "$SETUP_SCRIPT"
-
-cat >> "$SETUP_SCRIPT" << 'SETUP_EOF'
-cd /workspace
-
-# Setup .env file
-echo "\n[4/6] Setting up environment variables..."
-if [ ! -f .env ]; then
-    if [ -f .env.example ]; then
-        cp .env.example .env
-        echo "Created .env from .env.example"
-        echo "⚠️  Please edit .env with your actual API keys!"
-    else
-        echo "⚠️  No .env.example found. Please create .env manually."
-    fi
-fi
-
-# Install Node dependencies
-echo "\n[5/6] Installing Node.js dependencies..."
-npm install
-
-# Check if docker-compose is available
-echo "\n[6/6] Checking Docker..."
-if command -v docker &> /dev/null; then
-    echo "✓ Docker is available"
-else
-    echo "⚠️  Docker not found - may need manual installation"
-fi
-
-echo "\n========================================"
-echo "✓ Setup complete!"
-echo "========================================"
-echo "\nNext steps:"
-echo "  1. Edit /workspace/.env with your API keys"
-echo "  2. Start your application (e.g., npm run dev)"
-echo "  3. Access via the sandbox URL"
-SETUP_EOF
-
-chmod +x "$SETUP_SCRIPT"
-echo -e "${GREEN}✓ Setup script generated at: ${CYAN}sandbox-setup.sh${NC}"
-
-# Step 5: Get sandbox info
-echo -e "\n${GREEN}[5/7] Getting sandbox information...${NC}"
-daytona sandbox info "$WORKSPACE_NAME" || {
-    echo -e "${RED}Failed to get sandbox info${NC}"
+ssh "${SERVER_HOST}" "$DEPLOY_CMD" || {
+    echo -e "${RED}Deployment failed${NC}"
     exit 1
 }
 
-# Extract sandbox URL
-SANDBOX_URL=$(daytona sandbox info "$WORKSPACE_NAME" | grep -i "accessible" | awk '{print $NF}' || echo "")
-if [ -z "$SANDBOX_URL" ]; then
-    # Try to construct URL from ID
-    SANDBOX_ID=$(daytona sandbox info "$WORKSPACE_NAME" | grep "ID" | awk '{print $2}')
-    echo -e "${YELLOW}Could not auto-detect sandbox URL${NC}"
-    echo -e "${YELLOW}Sandbox ID: ${SANDBOX_ID}${NC}"
+echo -e "${GREEN}✓ Deployment successful${NC}"
+
+# Step 5: Check deployment status
+echo -e "\n${GREEN}[5/5] Checking deployment status...${NC}"
+
+# Get running containers
+echo -e "${YELLOW}Running containers:${NC}"
+ssh "${SERVER_HOST}" "cd ${SERVER_PATH} && docker compose ps" || true
+
+# Get port mappings
+echo -e "\n${YELLOW}Port mappings:${NC}"
+ssh "${SERVER_HOST}" "docker ps | cut -c131-" || true
+
+# Show logs if requested
+if [ "$SHOW_LOGS" = true ]; then
+    echo -e "\n${GREEN}Container logs (last 50 lines):${NC}"
+    ssh "${SERVER_HOST}" "cd ${SERVER_PATH} && docker compose logs --tail=50"
 fi
-
-# Step 6: Display setup instructions
-if [ "$SANDBOX_CREATED" = true ]; then
-    echo -e "\n${GREEN}[6/7] Setup Instructions${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Sandbox is ready!${NC}"
-    echo -e ""
-    echo -e "${YELLOW}Access your sandbox:${NC}"
-    if [ -n "$SANDBOX_URL" ]; then
-        echo -e "  ${CYAN}${SANDBOX_URL}${NC}"
-    fi
-    echo -e ""
-    echo -e "${YELLOW}To complete setup, run this ONE command in the sandbox terminal:${NC}"
-    echo -e "${CYAN}  curl -fsSL ${GIT_REPO}/raw/main/sandbox-setup.sh | bash${NC}"
-    echo -e ""
-    echo -e "${YELLOW}Or manually copy and run the setup script:${NC}"
-    echo -e "  1. Open sandbox terminal at the URL above"
-    echo -e "  2. Run these commands:"
-    echo -e "${CYAN}     git clone ${GIT_REPO} /workspace${NC}"
-    echo -e "${CYAN}     cd /workspace${NC}"
-    echo -e "${CYAN}     bash sandbox-setup.sh${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-else
-    echo -e "\n${GREEN}[6/7] Sandbox already exists and running${NC}"
-fi
-
-# Step 7: Cleanup and manage sandboxes
-echo -e "\n${GREEN}[7/7] Managing Daytona sandboxes...${NC}"
-
-# Promote new sandbox to active
-if [ "$ENVIRONMENT" = "prod" ]; then
-    echo -e "${GREEN}✓ Promoted ${WORKSPACE_NAME} to production${NC}"
-fi
-
-# List all AutoViral sandboxes
-echo -e "${YELLOW}Listing all AutoViral sandboxes:${NC}"
-daytona sandbox list 2>/dev/null | grep "${DAYTONA_WORKSPACE_PREFIX:-autoviral}" || echo "No sandboxes found"
-
-# Note about cleanup
-echo -e "${YELLOW}To cleanup old sandboxes, run: $SCRIPT_DIR/sandbox-cleanup.sh${NC}"
 
 # Final status
 echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}✓ Sandbox created/updated!${NC}"
+echo -e "${GREEN}✓ Deployment complete!${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "  Environment: ${YELLOW}${ENVIRONMENT}${NC}"
-echo -e "  Sandbox: ${YELLOW}${WORKSPACE_NAME}${NC}"
+echo -e "  Server: ${YELLOW}${SERVER_HOST}${NC}"
+echo -e "  Path: ${YELLOW}${SERVER_PATH}${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 echo -e "\n${GREEN}Useful commands:${NC}"
-echo -e "  ${YELLOW}daytona sandbox info $WORKSPACE_NAME${NC}     # Get sandbox details"
-echo -e "  ${YELLOW}$SCRIPT_DIR/sandbox-status.sh${NC}            # Monitor all sandboxes"
-echo -e "  ${YELLOW}$SCRIPT_DIR/sandbox-cleanup.sh${NC}           # Clean up old sandboxes"
+echo -e "  ${YELLOW}./scripts/server-logs.sh${NC}           # View server logs"
+echo -e "  ${YELLOW}./scripts/server-status.sh${NC}         # Check server status"
+echo -e "  ${YELLOW}ssh ${SERVER_HOST}${NC}                 # SSH to server"
 echo -e ""
-if [ "$SANDBOX_CREATED" = true ]; then
-    echo -e "${GREEN}🚀 Remember to run the setup script in your sandbox!${NC}"
-fi
+echo -e "${GREEN}Check ports:${NC}"
+echo -e "  ${YELLOW}ssh ${SERVER_HOST} docker ps | cut -c131-${NC}"

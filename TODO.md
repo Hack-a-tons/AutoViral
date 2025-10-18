@@ -8,11 +8,12 @@
 * [x] Create `.env.example` with all required variables
 * [x] Configure `.gitignore` for security (env files, credentials, generated media)
 * [x] Create `daytona.yaml` workspace configuration
+* [x] Create `Dockerfile` for Daytona sandbox creation (Node 20 + Playwright + ffmpeg)
 * [x] Create deployment scripts (`scripts/deploy.sh`, `scripts/sandbox-cleanup.sh`, `scripts/sandbox-status.sh`)
 * [x] Add help (`-h`/`--help`) to all scripts
 * [x] Scripts work from any directory (use `#!/usr/bin/env bash` and resolve `.env` path correctly)
-* [x] Updated for Daytona CLI v0.111.0 compatibility (`daytona sandbox` commands, `daytona login`)
-* [x] Install Daytona CLI on macOS (`daytona-darwin-arm64` binary)
+* [x] Updated for Daytona CLI v0.111.0 compatibility (`daytona sandbox` commands, `daytona login`, `--dockerfile`)
+* [x] Install Daytona CLI on macOS (`daytona-darwin-arm64` binary v0.111.0)
 * [x] Create `docs/` folder with `DEPLOYMENT.md`
 * [x] Update README.md with Quick Start guide
 

@@ -18,26 +18,21 @@
 
 ### Prerequisites
 
-1. **Install Daytona CLI v0.111.0+** (macOS):
+1. **SSH Access to Deployment Server**
    ```bash
-   # Download the binary
-   curl -L -o daytona-darwin-arm64 https://download.daytona.io/daytona/latest/daytona-darwin-arm64
-   chmod +x daytona-darwin-arm64
-   sudo mv daytona-darwin-arm64 /usr/local/bin/daytona
+   # Configure SSH key-based authentication
+   ssh-copy-id biaz.hurated.com
    
-   # Verify installation
-   daytona --version
+   # Test connection
+   ssh biaz.hurated.com "echo 'Connection successful'"
    ```
-   
-   **Note:** If you already have the binary in `~/Downloads/daytona-darwin-arm64`, just run:
-   ```bash
-   chmod +x ~/Downloads/daytona-darwin-arm64
-   sudo mv ~/Downloads/daytona-darwin-arm64 /usr/local/bin/daytona
-   ```
-   
-   Or see [installation guide](https://www.daytona.io/docs/installation/daytona-cli/) for other methods.
 
-2. **Other requirements:**
+2. **Server Requirements:**
+   - Docker and docker compose installed
+   - Git installed
+   - Port access for API and services
+
+3. **Local Requirements:**
    - Git repository set up with remote origin
    - API keys for OpenAI/Gemini/Claude, BrowserUse, Pexels
 
@@ -48,50 +43,81 @@
    git clone <your-repo-url>
    cd AutoViral
    cp .env.example .env
-   # Edit .env with your actual API keys
+   # Edit .env with your actual API keys and SERVER_HOST
    ```
 
-2. **Deploy to Daytona**
+2. **Deploy to Server**
+   
+   **Important:** The deploy script **automatically commits and pushes all changes!**
+   
    ```bash
-   # Deploy to production
-   ./scripts/deploy.sh --prod
+   # Deploy to server
+   ./scripts/deploy.sh
    
-   # Or deploy to dev environment
-   ./scripts/deploy.sh --dev
+   # With custom commit message
+   ./scripts/deploy.sh -m "Initial deployment"
    
-   # With commit message
-   ./scripts/deploy.sh --prod -m "Initial deployment"
+   # Deploy without rebuilding Docker images
+   ./scripts/deploy.sh --skip-build
+   
+   # Deploy and show logs
+   ./scripts/deploy.sh --logs
+   ```
+   
+   **What the script does:**
+   1. Stages all changes (`git add .`)
+   2. Commits with auto-generated or custom message
+   3. Pushes to your git remote
+   4. Copies `.env` to server via scp
+   5. SSHs to server and runs:
+      - `git pull`
+      - `docker compose build`
+      - `docker compose up -d`
+   6. Shows deployment status and port mappings
+
+3. **View logs**
+   ```bash
+   # View all service logs
+   ./scripts/server-logs.sh
+   
+   # Follow logs in real-time
+   ./scripts/server-logs.sh -f
+   
+   # View specific service
+   ./scripts/server-logs.sh api
+   ./scripts/server-logs.sh -f worker
    ```
 
-3. **Monitor sandboxes**
+4. **Monitor deployment**
    ```bash
-   # View current status
-   ./scripts/sandbox-status.sh
+   # Check server status
+   ./scripts/server-status.sh
    
    # Watch mode (continuous updates)
-   ./scripts/sandbox-status.sh --watch
-   ```
-
-4. **Cleanup old workers**
-   ```bash
-   # Remove sandboxes older than 30 minutes
-   ./scripts/sandbox-cleanup.sh
+   ./scripts/server-status.sh --watch
+   
+   # Check ports directly
+   ssh biaz.hurated.com docker ps | cut -c131-
    ```
 
 💡 **All scripts support `--help` flag** for detailed usage information.
 
-📖 **Full deployment guide:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+📖 **Documentation:**
+- [Deployment Guide](docs/DEPLOYMENT.md) - Complete deployment instructions
+- [Scripts Reference](scripts/README.md) - All available scripts
+
+**Note:** This project deploys to a remote server via SSH, not Daytona sandboxes.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────── Control Plane (Daytona workspace) ────────────────────────────────┐
-│  Express API  ──┬──────────────┬──────────────┬──────────────┬──────────────┐                   │
-│                 │ /trends/*    │ /jobs/*      │ /posts/*     │ /settings/*  │  /stop/*         │
-│  Scheduler      ├──────────────┼──────────────┼──────────────┼──────────────┤  Webhooks        │
-│  (fast loop)    │              │              │              │              │  /webhook/*      │
+┌──────────────────────────────── Control Plane (Remote Server) ────────────────────────────────┐
+│  Express API  ──┬──────────────┬──────────────┬──────────────┬──────────────┐                │
+│                 │ /trends/*    │ /jobs/*      │ /posts/*     │ /settings/*  │  /stop/*      │
+│  Scheduler      ├──────────────┼──────────────┼──────────────┼──────────────┤  Webhooks     │
+│  (fast loop)    │              │              │              │              │  /webhook/*   │
 │                 ▼              ▼              ▼              ▼              ▼                   │
 │  Trend Discovery Workers  →  Selection Engine  →  Gen Workers  →  Posting Workers  →  Metrics   │
 │   (BrowserUse + APIs)         (scorer)           (LLM+ffmpeg)    (BrowserUse)         (ingest)  │
@@ -99,9 +125,10 @@
 │  SQLite/Postgres: trends • generations • posts • metrics • settings • allow/deny lists          │
 └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-┌────────────── Daytona Sandboxes (ephemeral) ──────────────┐
-│  • discovery-<id>  (BrowserUse: scrape X/Reddit/Trends)   │
-│  • gen-<id>        (LLM prompts + Pexels fetch + ffmpeg)  │
+┌────────────── Browser Use Sandboxes (if using Daytona) ──────────────┐
+│  • For browser automation tasks (scraping, posting)                   │
+│  • Ephemeral, created on-demand via Daytona API                      │
+│  • Managed separately from main deployment                            │
 │  • post-<id>       (BrowserUse uploads + captions)        │
 └───────────────────────────────────────────────────────────┘
 ```

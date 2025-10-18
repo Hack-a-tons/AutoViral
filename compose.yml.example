@@ -1,0 +1,97 @@
+# AutoViral Docker Compose Configuration
+# Copy this to compose.yml and customize as needed
+# All ports come from .env file
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: autoviral-api
+    ports:
+      - "${API_PORT}:3000"
+    environment:
+      - NODE_ENV=production
+      - DB_URL=${DB_URL}
+      - AUTH_BEARER_KEY=${AUTH_BEARER_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      - DAYTONA_API_KEY=${DAYTONA_API_KEY}
+      - DAYTONA_API_URL=${DAYTONA_API_URL}
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    networks:
+      - autoviral-network
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: autoviral-worker
+    ports:
+      - "${WORKER_PORT}:4000"
+    environment:
+      - NODE_ENV=production
+      - DB_URL=${DB_URL}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - BROWSER_USE_API_KEY=${BROWSER_USE_API_KEY}
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      - DAYTONA_API_KEY=${DAYTONA_API_KEY}
+      - DAYTONA_API_URL=${DAYTONA_API_URL}
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    networks:
+      - autoviral-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: autoviral-db
+    ports:
+      - "${DB_PORT}:5432"
+    environment:
+      - POSTGRES_DB=autoviral
+      - POSTGRES_USER=autoviral
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - autoviral-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: autoviral-redis
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - autoviral-network
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  autoviral-network:
+    driver: bridge
