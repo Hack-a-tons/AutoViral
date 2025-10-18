@@ -118,24 +118,47 @@ display_status() {
         }
     fi
     
-    # Control plane sandboxes
-    echo -e "\n${GREEN}Control Plane Sandboxes:${NC}"
-    printf "  %-30s %-15s %-10s %s\n" "NAME" "STATUS" "AGE" "URL"
+    # All sandboxes
+    echo -e "\n${GREEN}All Sandboxes:${NC}"
+    printf "  %-40s %-15s %-10s\n" "ID" "STATUS" "CREATED"
     echo -e "${CYAN}  ────────────────────────────────────────────────────────────────────────${NC}"
     
-    daytona sandbox list 2>/dev/null | grep -E "autoviral-control" | while read -r name status rest; do
-        # Get detailed info
-        INFO=$(daytona sandbox info "$name" 2>/dev/null || echo "")
-        
-        # Color status
-        if [ "$status" = "Running" ] || [ "$status" = "running" ]; then
-            STATUS_COLOR="${GREEN}"
-        else
-            STATUS_COLOR="${YELLOW}"
+    # Get all sandbox IDs from list output
+    SANDBOX_COUNT=0
+    TEMP_OUTPUT=$(mktemp)
+    
+    daytona sandbox list 2>/dev/null | grep -E '^\[\[' | while read -r line; do
+        if [ -n "$line" ]; then
+            # Extract ID - format is [[UUID   STATUS...]]
+            SANDBOX_ID=$(echo "$line" | sed 's/^\[\[//; s/[[:space:]].*//; s/\]\]$//')
+            if [ -n "$SANDBOX_ID" ]; then
+                # Get sandbox info
+                INFO=$(daytona sandbox info "$SANDBOX_ID" 2>/dev/null)
+                SANDBOX_STATUS=$(echo "$INFO" | grep "State" | awk '{print $2}')
+                CREATED=$(echo "$INFO" | grep "Created" | cut -d' ' -f2-)
+                
+                # Color status
+                if [ "$SANDBOX_STATUS" = "STARTED" ] || [ "$SANDBOX_STATUS" = "Running" ]; then
+                    STATUS_COLOR="${GREEN}"
+                elif [ "$SANDBOX_STATUS" = "ERROR" ]; then
+                    STATUS_COLOR="${RED}"
+                else
+                    STATUS_COLOR="${YELLOW}"
+                fi
+                
+                # Shorten ID for display
+                SHORT_ID=$(echo "$SANDBOX_ID" | cut -c1-36)
+                printf "  %-40s ${STATUS_COLOR}%-15s${NC} %-10s\n" "$SHORT_ID" "$SANDBOX_STATUS" "$CREATED"
+                echo "1" >> "$TEMP_OUTPUT"
+            fi
         fi
-        
-        printf "  %-30s ${STATUS_COLOR}%-15s${NC}\n" "$name" "$status"
     done
+    
+    # Check if any sandboxes were found
+    if [ ! -s "$TEMP_OUTPUT" ]; then
+        echo -e "  ${YELLOW}No sandboxes found${NC}"
+    fi
+    rm -f "$TEMP_OUTPUT"
     
     # Worker sandboxes
     echo -e "\n${GREEN}Worker Sandboxes (Ephemeral):${NC}"
