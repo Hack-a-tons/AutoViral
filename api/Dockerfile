@@ -15,15 +15,15 @@ RUN npm install
 # Generate Prisma client
 RUN npx prisma generate
 
-# Copy source code
+# Copy source code and startup script
 COPY src ./src
+COPY start.sh ./
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 
-# Initialize database on startup
-RUN echo '#!/bin/sh\nnpx prisma db push --skip-generate\nnpm start' > /app/start.sh && \
-    chmod +x /app/start.sh
+# Make startup script executable
+RUN chmod +x /app/start.sh
 
 EXPOSE 3000
 
