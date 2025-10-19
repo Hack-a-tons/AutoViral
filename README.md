@@ -1,19 +1,27 @@
-# README.md
-
-## AutoViral — Fully‑Automated Trend→Content→Post→Monetize Engine (Daytona‑Native)
+# AutoViral — AI-Powered Instagram Trend Discovery
 
 🌐 **Live App:** [https://app.viral.biaz.hurated.com](https://app.viral.biaz.hurated.com)  
 📊 **API:** [https://viral.biaz.hurated.com](https://viral.biaz.hurated.com)
 
-**AutoViral** is an AI system that detects brand‑new social trends in near‑real‑time, manufactures short vertical videos (with audio + subtitles), posts them autonomously across selected networks, monitors performance, and doubles down on winners — all while letting a human **veto/stop** any trend at any time via API.
+**AutoViral** discovers Instagram trends in real-time using Browser Use Cloud, scores them by engagement velocity, and provides a REST API for building viral content automation systems.
 
-* **Runtime:** Daytona sandboxes (workspaces are created/destroyed on demand)
-* **Browsing hands:** BrowserUse agents running inside Daytona sandboxes
-* **LLMs:** OpenAI / Gemini / Claude (switchable); optional **Galileo.ai** for prompt eval & safety
-* **Control plane:** REST API + (optional) MCP for prompts/settings
-* **Guardrails:** Safety filter prompts + allowlist/denylist + hard platform policies
+##  Current Status: Phase 1 Complete ✅
 
-> **Key principle:** *Speed beats volume.* We prioritize catching trends early over processing many trends.
+**What's Working:**
+- ✅ Real Instagram trend discovery every 1-5 minutes
+- ✅ Browser Use Cloud integration (managed browser automation)
+- ✅ Automatic velocity scoring (speed + engagement)
+- ✅ REST API with enhanced fields (media, posts, platform data)
+- ✅ Deployed and running 24/7 at `viral.biaz.hurated.com`
+- ✅ 10 real trends discovered per cycle
+
+**Tech Stack:**
+- **Discovery:** Browser Use Cloud API (no login, public Instagram explore)
+- **API:** Express.js + SQLite + Prisma
+- **Worker:** Node.js scheduler with configurable intervals
+- **Deployment:** Docker Compose on `biaz.hurated.com`
+
+> **Philosophy:** Speed beats volume. We catch trends **early** using real-time scraping.
 
 ---
 
@@ -21,318 +29,304 @@
 
 ### Prerequisites
 
-1. **SSH Access to Deployment Server**
-   ```bash
-   # Configure SSH key-based authentication
-   ssh-copy-id biaz.hurated.com
+1. **API Keys:**
+   - Browser Use Cloud API key → https://cloud.browser-use.com
    
-   # Test connection
-   ssh biaz.hurated.com "echo 'Connection successful'"
-   ```
+2. **Local Development:**
+   - Node.js 20+
+   - Docker & Docker Compose
 
-2. **Server Requirements:**
-   - Docker and docker compose installed
-   - Git installed
-   - Port access for API and services
+3. **Deployment:**
+   - SSH access to your server
+   - Git configured
 
-3. **Local Requirements:**
-   - Git repository set up with remote origin
-   - API keys for OpenAI/Gemini/Claude, BrowserUse, Pexels
+### Installation
 
-### Setup
+```bash
+# 1. Clone repository
+git clone https://github.com/Hack-a-tons/AutoViral
+cd AutoViral
 
-1. **Clone and configure environment**
-   ```bash
-   git clone <your-repo-url>
-   cd AutoViral
-   cp .env.example .env
-   # Edit .env with your actual API keys and SERVER_HOST
-   ```
+# 2. Configure environment
+cp .env.example .env
+# Edit .env and add your BROWSER_USE_API_KEY
 
-2. **Deploy to Server**
-   
-   **Important:** The deploy script **automatically commits and pushes all changes!**
-   
-   ```bash
-   # Deploy to server
-   ./scripts/deploy.sh
-   
-   # With custom commit message
-   ./scripts/deploy.sh -m "Initial deployment"
-   
-   # Deploy without rebuilding Docker images
-   ./scripts/deploy.sh --skip-build
-   
-   # Deploy and show logs
-   ./scripts/deploy.sh --logs
-   ```
-   
-   **What the script does:**
-   1. Stages all changes (`git add .`)
-   2. Commits with auto-generated or custom message
-   3. Pushes to your git remote
-   4. Copies `.env` to server via scp
-   5. SSHs to server and runs:
-      - `git pull`
-      - `docker compose build`
-      - `docker compose up -d`
-   6. Shows deployment status and port mappings
+# 3. Set discovery interval (optional, default: 5 minutes)
+./scripts/set-discovery-interval.sh 1   # 1 minute for testing
+./scripts/set-discovery-interval.sh 5   # 5 minutes for production
 
-3. **View logs**
-   ```bash
-   # View all service logs
-   ./scripts/server-logs.sh
-   
-   # Follow logs in real-time
-   ./scripts/server-logs.sh -f
-   
-   # View specific service
-   ./scripts/server-logs.sh api
-   ./scripts/server-logs.sh -f worker
-   ```
+# 4. Deploy to server
+./scripts/deploy.sh -m "Initial deployment"
+```
 
-4. **Monitor deployment**
-   ```bash
-   # Check server status
-   ./scripts/server-status.sh
-   
-   # Watch mode (continuous updates)
-   ./scripts/server-status.sh --watch
-   
-   # Check ports directly
-   ssh biaz.hurated.com docker ps | cut -c131-
-   ```
+### Monitoring
 
-💡 **All scripts support `--help` flag** for detailed usage information.
+```bash
+# View worker logs (real-time)
+./scripts/server-logs.sh worker -f
 
-📖 **Documentation:**
-- [Deployment Guide](docs/DEPLOYMENT.md) - Complete deployment instructions
-- [Scripts Reference](scripts/README.md) - All available scripts
+# Check deployment status
+./scripts/server-status.sh
 
-**Note:** This project deploys to a remote server via SSH, not Daytona sandboxes.
+# View discovered trends
+./scripts/trends.sh
+
+# Test API
+curl https://viral.biaz.hurated.com/trends | jq .
+```
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────── Control Plane (Remote Server) ────────────────────────────────┐
-│  Express API  ──┬──────────────┬──────────────┬──────────────┬──────────────┐                │
-│                 │ /trends/*    │ /jobs/*      │ /posts/*     │ /settings/*  │  /stop/*      │
-│  Scheduler      ├──────────────┼──────────────┼──────────────┼──────────────┤  Webhooks     │
-│  (fast loop)    │              │              │              │              │  /webhook/*   │
-│                 ▼              ▼              ▼              ▼              ▼                   │
-│  Trend Discovery Workers  →  Selection Engine  →  Gen Workers  →  Posting Workers  →  Metrics   │
-│   (BrowserUse + APIs)         (scorer)           (LLM+ffmpeg)    (BrowserUse)         (ingest)  │
-│                                                                                                 │
-│  SQLite/Postgres: trends • generations • posts • metrics • settings • allow/deny lists          │
-└─────────────────────────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────── Browser Use Sandboxes (if using Daytona) ──────────────┐
-│  • For browser automation tasks (scraping, posting)                   │
-│  • Ephemeral, created on-demand via Daytona API                      │
-│  • Managed separately from main deployment                            │
-│  • post-<id>       (BrowserUse uploads + captions)        │
-└───────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  AutoViral Worker (biaz.hurated.com)    │
+│  - Discovers trends every 1-5 minutes    │
+│  - Scores by velocity + engagement       │
+│  - Reports to API                        │
+└────────────┬────────────────────────────┘
+             │ HTTP REST API
+             ↓
+┌─────────────────────────────────────────┐
+│  Browser Use Cloud (api.browser-use.com) │
+│  - Managed browser automation            │
+│  - Scrapes Instagram explore             │
+│  - Returns trending hashtags             │
+│  - ~$0.01-0.05 per task                  │
+└─────────────────────────────────────────┘
+             │ JSON Results
+             ↓
+┌─────────────────────────────────────────┐
+│  AutoViral API (viral.biaz.hurated.com)  │
+│  - SQLite database                       │
+│  - Enhanced trend data                   │
+│  - Public REST endpoints                 │
+└─────────────────────────────────────────┘
+             │ JSON API
+             ↓
+┌─────────────────────────────────────────┐
+│  Your Frontend App                       │
+│  - Displays trends                       │
+│  - Shows engagement metrics              │
+│  - Real-time updates                     │
+└─────────────────────────────────────────┘
 ```
 
-### Core components
+### How Discovery Works
 
-* **Control Plane API (Express/Node)**: orchestrates jobs, exposes monitoring/stop endpoints, stores state, emits webhooks.
-* **Discovery workers (BrowserUse + API)**: pull *freshest* trending topics (X trending, Reddit hot, Google Trends; BrowserUse fills API gaps).
-* **Selection engine**: ranks trends by recency, novelty, predicted virality; dedupes; applies user allow/deny lists.
-* **Generation workers**: prompts LLM → script/caption/hashtags/thumbnail prompt; fetches **royalty‑free** B‑roll (Pexels) → composes 9–20s vertical MP4 with audio/subs via ffmpeg.
-* **Posting workers (BrowserUse)**: authenticate throwaway/brand accounts; post video + caption; store canonical post URLs.
-* **Metrics loop**: polls view/reaction counts; if positive signal → schedule follow‑up; if not → auto‑stop.
-* **Kill switch**: global and per‑trend **/stop** API immediately halts discovery/gen/posting for that trend.
-* **Settings & Prompts**: live‑editable via API/MCP. Prompts are versioned files under `/prompts/*`.
-
----
-
-## Data model (minimal)
-
-**trends**: `id, created_at, keyword, source, status{discovering|selected|blocked|stopped}, score, reason`
-
-**generations**: `id, trend_id, created_at, stage{idea|video|ready|failed}, mp4_path, thumb_path, caption_json, safety_decision, notes`
-
-**posts**: `id, generation_id, platform, url, posted_at, status{queued|posted|failed}`
-
-**metrics**: `id, post_id, snapshot_at, views, likes, comments, ctr, cta_type{BUY|JOIN|AFFIL|ASK}`
-
-**settings**: `id, key, value_json` (e.g., social networks on/off, Pexels API key, LLM provider)
-
-**lists**: `type{allow|deny}, value, scope{keyword|user|subreddit|hashtag}`
+1. **Worker** runs on schedule (1-5 minute intervals)
+2. **Creates task** via Browser Use Cloud API
+3. **Browser automation** navigates Instagram explore (no login)
+4. **Extracts** trending hashtags with engagement data
+5. **Scores** trends by velocity (growth speed)
+6. **Reports** to API via webhook
+7. **Deduplicates** (same hashtag within 1 hour = skip)
+8. **Stores** in database with metadata
 
 ---
 
-## REST API (initial)
+## API Documentation
 
-> All endpoints are `Bearer`‑key protected. Return JSON. Timestamps in ISO.
+See **[API.md](API.md)** for complete client integration guide.
 
-### Monitoring
+**Quick example:**
+```bash
+# Get recent trends
+curl https://viral.biaz.hurated.com/trends?since=1h | jq .
 
-* `GET /trends?status=discovering|selected&since=1h&query=...` → list trends
-* `GET /trends/:id` → single trend (status, score, reason)
-* `GET /generations?since=30m&trend_id=...` → list generations
-* `GET /generations/:id` → details (files/URLs/status/safety)
-* `GET /posts?trend_id=...` → where content was posted
-* `GET /metrics?post_id=...&since=...` → performance snapshots
-
-### Control
-
-* `POST /stop/trend/:id` → stop all activity for trend
-* `POST /stop/keyword` body `{ keyword }` → stop any matching trend
-* `POST /lists/deny` body `{ value, scope }` → add deny rule
-* `DELETE /lists/deny` body `{ value, scope }` → remove deny rule
-* `POST /settings` body `{ key, value }` → upsert a setting (e.g., add/remove networks, media repos)
-* `POST /actions/retry` body `{ generation_id | post_id }`
-
-### Webhooks (from workers)
-
-* `POST /webhook/trend` `{ id, status, score }`
-* `POST /webhook/generation` `{ id, trend_id, stage, mp4_path, safety_decision }`
-* `POST /webhook/post` `{ id, generation_id, platform, url, status }`
-* `POST /webhook/metrics` `{ post_id, snapshot }`
-
----
-
-## Workflow (fast loop)
-
-1. **Discover**: continuously scrape *new* trends (speed > volume). Emit `trends`.
-2. **Select**: score newest items; short‑circuit to **selected** if above threshold & not denied.
-3. **Generate**: run prompts → script + caption + hashtags + thumb; Pexels fetcher; ffmpeg build (audio + subs).
-4. **Safety**: run safety filter; if FAIL → auto‑edit/regenerate; else proceed.
-5. **Post**: BrowserUse uploads to chosen networks; store canonical URLs.
-6. **Monitor**: poll metrics; if positive → **follow‑up**; else mark trend **stopped**.
-7. **Human control**: at any moment, `/stop` kills a trend or keyword family.
+# Response:
+{
+  "count": 10,
+  "trends": [
+    {
+      "id": "uuid",
+      "keyword": "#art",
+      "source": "instagram",
+      "score": 87,
+      "metadata": {
+        "postCount": 150000,
+        "engagement": "high",
+        "velocity": "fast"
+      },
+      "discoveredAt": "2025-10-19T00:07:03.833Z"
+    }
+  ]
+}
+```
 
 ---
 
-## Prompts & Providers
+## Scripts Reference
 
-* `/prompts/generator/{openai|gemini|claude}.txt`
-* `/prompts/safety/{openai|gemini|claude}.txt`
-* `/prompts/monetization/{openai|gemini|claude}.txt`
-* `/prompts/selection_policy.txt` – scoring rubric (novelty, recency, risk, platform fit)
+All scripts are in `scripts/` directory. Use `--help` for details.
 
-Switch provider with env or `/settings` (e.g., `{"llm_provider":"openai"}`).
+### Core Scripts
 
----
+| Script | Description | Example |
+|--------|-------------|---------|
+| `set-discovery-interval.sh` | Configure discovery frequency | `./scripts/set-discovery-interval.sh 1` |
+| `deploy.sh` | Deploy to server (commit + push + docker) | `./scripts/deploy.sh -m "message"` |
+| `server-logs.sh` | View service logs | `./scripts/server-logs.sh worker -f` |
+| `server-status.sh` | Check deployment status | `./scripts/server-status.sh` |
+| `trends.sh` | View discovered trends | `./scripts/trends.sh` |
 
-## Daytona orchestration
+### Discovery Interval
 
-### Sandbox Management
+The discovery interval controls how often Instagram is scraped.
 
-* **Control plane workspaces** (persistent):
-  - `autoviral-control-prod` — Production instance
-  - `autoviral-control-dev` — Development instance
-  - Contains: API + DB + scheduler + dashboards
-  - **Only 2 control plane sandboxes run at a time**
+```bash
+# During development (fast testing)
+./scripts/set-discovery-interval.sh 1  # Every 1 minute
 
-* **Ephemeral worker sandboxes** (auto-managed):
-  - `discovery-<id>` — Trend scraping (BrowserUse + APIs)
-  - `gen-<id>` — Content generation (LLM + ffmpeg)
-  - `post-<id>` — Platform posting (BrowserUse)
-  - Auto-created on demand
-  - **Auto-deleted after `MAX_SANDBOX_LIFETIME_MINUTES` (default: 30)**
-  - All tools pre-installed (BrowserUse, Playwright, ffmpeg)
+# Production (avoid rate limits)
+./scripts/set-discovery-interval.sh 5  # Every 5 minutes
+```
 
-* **State management**:
-  - State lives only in control plane (DB)
-  - Worker sandboxes are stateless
-  - Artifacts pushed back via webhook
-  - `.env` file copied to each sandbox during deployment
-
-* **Deployment strategy**:
-  - Deploy script creates new sandbox (dev or prod)
-  - Health check validates deployment
-  - Old sandbox kept as backup during deploy
-  - Failed deploys trigger automatic rollback
-  - See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for details
+**Note:** Changes require worker restart: `ssh server "cd AutoViral && docker compose restart worker"`
 
 ---
 
-## Posting networks (initial set)
+## Environment Variables
 
-* **X (Twitter)**, **Reddit**, **YouTube Shorts**, **Instagram Reels** (as accounts & captchas permit)
-* Start with X + Reddit for lowest friction; expand with toggles in `/settings`.
+All configuration in `.env` file (copy from `.env.example`):
+
+**Required:**
+```bash
+BROWSER_USE_API_KEY=bu_xxx...  # From cloud.browser-use.com
+DATABASE_URL=file:../data/autoviral.db
+API_URL=http://api:3000
+DISCOVERY_INTERVAL_MINUTES=5
+```
+
+**Optional (Phase 2+):**
+```bash
+INSTAGRAM_USERNAME=username    # Not currently used (no login)
+INSTAGRAM_PASSWORD=password    # Not currently used
+AUTH_BEARER_KEY=secret         # Future: API authentication
+```
 
 ---
 
-## Royalty‑free sources
+## Data Model
 
-* **Video:** [https://www.pexels.com/videos/](https://www.pexels.com/videos/) • [https://pixabay.com/videos/](https://pixabay.com/videos/) • [https://mixkit.co/free-stock-video/](https://mixkit.co/free-stock-video/)
-* **Audio:** [https://pixabay.com/music/](https://pixabay.com/music/) • [https://studio.youtube.com/audio](https://studio.youtube.com/audio) • [https://mixkit.co/free-stock-music/](https://mixkit.co/free-stock-music/)
+### Trend Object
 
-> Built‑in Pexels fetcher (`/media/fetcher.ts`) prefers official API; keyless HTML fallback provided for hack‑day.
-
----
-
-## Environment & compose
-
-### Environment Configuration
-
-**All sensitive values (API keys, tokens, credentials) must be stored in `.env` file — never hardcoded.**
-
-1. Copy `.env.example` to `.env`
-2. Fill in your actual values
-3. `.env` is gitignored for security
-
-**Required variables in `.env`:**
-- `DAYTONA_API_KEY`, `DAYTONA_API_URL` — Daytona access
-- `BROWSER_USE_API_KEY` — BrowserUse automation
-- `OPENAI_API_KEY`, `GEMINI_API_KEY`, `CLAUDE_API_KEY` — LLM providers
-- `PEXELS_API_KEY` — Royalty-free media
-- `GALILEO_AI_API_KEY` — Optional prompt evaluation
-- `AUTH_BEARER_KEY` — API security
-- Platform credentials (X, Reddit, Instagram, etc.)
-
-**compose.yml** (sketch):
-
-```yaml
-version: "3.8"
-services:
-  api:
-    image: node:20
-    working_dir: /app
-    volumes: ["./:/app"]
-    command: sh -lc "npm i && npm run dev"
-    ports: ["${EXTERNAL_API_PORT:-3000}:3000"]
-    env_file: .env
-    environment:
-      - DB_URL=${DB_URL}
-      - AUTH_BEARER_KEY=${AUTH_BEARER_KEY}
-      - LLM_PROVIDER=${LLM_PROVIDER}
+```typescript
+{
+  id: string;              // UUID
+  keyword: string;         // e.g., "#art"
+  source: "instagram";     // Always instagram for Phase 1
+  status: string;          // "discovering" | "selected" | "blocked" | "stopped"
+  score: number;           // 0-100 velocity score
+  reason: string;          // Why this score
   
-  worker-base:
-    image: mcr.microsoft.com/playwright:v1.47.2-jammy
-    working_dir: /app
-    volumes: ["./:/app"]
-    shm_size: 1g
-    env_file: .env
-    environment:
-      - DISPLAY=:99
-      - TZ=UTC
+  // Enhanced fields (Phase 1 complete)
+  thumbnailUrl?: string;   // Main image
+  metadata: object;        // postCount, engagement, velocity, hashtags
+  media?: object;          // thumbnailUrl, videoUrl, imageUrls
+  examplePosts?: array;    // [{creator, thumbnailUrl, postUrl, likes, views}]
+  platformData?: object;   // instagram: {hashtagUrl, postCount, avgEngagement}
+  analysis?: object;       // category, difficulty, bestTimes
+  
+  discoveredAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
 ```
 
-All environment variables are loaded from `.env` via `env_file` directive.
+---
+
+## Roadmap
+
+### Phase 1: Discovery ✅ COMPLETE (Oct 2025)
+- ✅ Browser Use Cloud integration
+- ✅ Real Instagram scraping
+- ✅ Velocity scoring
+- ✅ REST API with enhanced fields
+- ✅ Deployed and operational
+
+### Phase 2: Selection Engine (Next)
+- ⏳ LLM-powered trend analysis
+- ⏳ Content safety filtering
+- ⏳ Trend prioritization
+- ⏳ Human veto system
+
+### Phase 3: Content Generation (Future)
+- ⏳ Video generation (ffmpeg)
+- ⏳ AI script writing
+- ⏳ Subtitle generation
+- ⏳ Thumbnail creation
+
+### Phase 4: Posting & Monetization (Future)
+- ⏳ Multi-platform posting (Instagram, TikTok, YouTube)
+- ⏳ Performance tracking
+- ⏳ A/B testing
+- ⏳ Affiliate integration
 
 ---
 
-## Security & safety
+## Troubleshooting
 
-* API bearer key + optional IP allowlist.
-* Enforce allow/deny lists before generation/posting.
-* Safety prompt gate + static regex filters (e.g., sensitive terms).
-* Rate‑limit posting; emulate human behavior with BrowserUse.
-* Separate credentials per platform; never hardcode in repo.
+### Worker not discovering trends
+
+```bash
+# Check logs
+./scripts/server-logs.sh worker --tail=50
+
+# Look for:
+# [Browser Use Cloud] Task created: <uuid>
+# [Browser Use Cloud] Received 10 raw trends
+# [Reported] #hashtag - Trend created
+```
+
+### API not responding
+
+```bash
+# Check API health
+curl https://viral.biaz.hurated.com/health
+
+# Check status
+./scripts/server-status.sh
+```
+
+### Discovery too slow/fast
+
+```bash
+# Adjust interval
+./scripts/set-discovery-interval.sh <minutes>
+
+# Restart worker
+ssh biaz.hurated.com "cd AutoViral && docker compose restart worker"
+```
 
 ---
 
-## Roadmap (post‑hackathon)
+## Cost Estimate
 
-* Multi‑armed bandit for follow‑ups (budget to winners).
-* Fine‑tuned style per network; thumbnail A/B.
-* Realtime analytics dashboard.
-* Auto‑spin affiliate/shop offers per intent.
-* Human‑in‑the‑loop “approve queue” mode for brands.
+**Browser Use Cloud:**
+- ~$0.01-0.05 per scraping task
+- 10 discoveries/hour = ~$2.40-12/day
+- Monthly: ~$72-360
+
+**Server:**
+- $10-50/month (depending on provider)
+
+**Total:** ~$82-410/month for 24/7 trend discovery
+
+---
+
+## Documentation
+
+- **[API.md](API.md)** - Complete API reference for client apps
+- **[TODO.md](TODO.md)** - Detailed roadmap and future phases
+
+---
+
+## Support
+
+- **Issues:** https://github.com/Hack-a-tons/AutoViral/issues
+- **Live API:** https://viral.biaz.hurated.com
+- **Frontend:** https://app.viral.biaz.hurated.com
+
+**Created with ❤️ for catching viral trends before they explode**

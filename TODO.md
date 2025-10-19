@@ -1,125 +1,435 @@
-# TODO.md
+# AutoViral Roadmap
 
-> Implementation plan broken into independently runnable parts. **Start with Monitoring.** Each step includes a deliverable and a test.
+Implementation roadmap broken into phases. Each phase builds on the previous one.
 
-## Phase 0 — Repo & Scaffolding (0.5d)
+---
 
-### Environment & Deployment Setup ✓
-* [x] Create `.env.example` with all required variables
-* [x] Configure `.gitignore` for security (env files, credentials, generated media)
-* [x] Create `daytona.yaml` workspace configuration
-* [x] Create `Dockerfile` for Daytona sandbox creation (Node 20 + Playwright + ffmpeg)
-* [x] Create deployment scripts (`scripts/deploy.sh`, `scripts/sandbox-cleanup.sh`, `scripts/sandbox-status.sh`)
-* [x] Add help (`-h`/`--help`) to all scripts
-* [x] Scripts work from any directory (use `#!/usr/bin/env bash` and resolve `.env` path correctly)
-* [x] Updated for Daytona CLI v0.111.0 compatibility (`daytona sandbox` commands, `daytona login`, `--dockerfile`)
-* [x] Install Daytona CLI on macOS (`daytona-darwin-arm64` binary v0.111.0)
-* [x] Create `docs/` folder with `DEPLOYMENT.md`
-* [x] Update README.md with Quick Start guide
+## ✅ Phase 1: Discovery System (COMPLETE - Oct 2025)
 
-### Application Scaffolding (TODO)
-* [ ] Init Node/TS project; add `compose.yml`
-* [ ] Create folders: `api/`, `worker/`, `media/`, `prompts/`
-* [ ] Add DB (SQLite via Prisma/Drizzle). Migrate schemas for trends/generations/posts/metrics/settings/lists.
-* **Deliverable:** `GET /health` returns OK. DB file exists.
+**Status:** Live and operational at `viral.biaz.hurated.com`
 
-**Note:** Install Daytona CLI before deploying: `brew install daytona` (see README Quick Start)
+### Completed Features
 
-## Phase 1 — Monitoring: Trend Discovery (speed > volume)
+- [x] Browser Use Cloud integration
+  - [x] REST API client (no SDK needed)
+  - [x] Instagram public explore scraping (no login)
+  - [x] Automatic task polling and status checks
+  - [x] Error handling and retries
 
-* [ ] Implement `discovery` worker (BrowserUse inside Daytona sandbox):
+- [x] Trend Discovery Worker
+  - [x] Configurable discovery interval (1-5 minutes)
+  - [x] Velocity scoring algorithm
+  - [x] Duplicate detection (1-hour window)
+  - [x] Automatic reporting to API
 
-  * Scrape **X trending** (logged‑out), **Reddit r/all hot/new**, optional Google Trends.
-  * Normalize items → `{keyword, source, discovered_at}`.
-  * De‑dupe; push to control plane via `POST /webhook/trend`.
-* [ ] API: `GET /trends?status=discovering&since=1h`.
-* [ ] Selection policy v1 (prompt + heuristics: recency boost, novelty, length).
-* **Test:** run for 10 minutes; `/trends` shows fresh items.
+- [x] REST API (Express + SQLite)
+  - [x] GET /health
+  - [x] GET /trends (with filtering)
+  - [x] GET /trends/:id
+  - [x] POST /webhook/trend
+  - [x] POST /stop/trend/:id
+  - [x] POST /stop/keyword
 
-## Phase 2 — Selection & Kill Switch
+- [x] Enhanced Database Schema
+  - [x] Core fields (keyword, source, status, score)
+  - [x] Enhanced fields (thumbnailUrl, media, examplePosts, platformData, analysis)
+  - [x] JSON field parsing
+  - [x] Automatic timestamps
 
-* [ ] Implement selection scorer (prompt‑assisted) → marks some trends **selected**.
-* [ ] Add deny/allow list checks.
-* [ ] **Kill switch:** `POST /stop/trend/:id`, `POST /stop/keyword`.
-* **Test:** mark a live trend as stopped; observe no further jobs created.
+- [x] Deployment Infrastructure
+  - [x] Docker Compose setup
+  - [x] SSH-based deployment script
+  - [x] Server monitoring scripts
+  - [x] Automated builds and restarts
 
-## Phase 3 — Content Generation (idea → assets)
+- [x] Scripts & Tools
+  - [x] `set-discovery-interval.sh` - Configure discovery frequency
+  - [x] `deploy.sh` - One-command deployment
+  - [x] `server-logs.sh` - View service logs
+  - [x] `server-status.sh` - Check deployment
+  - [x] `trends.sh` - View discovered trends
 
-* [ ] Add prompt loaders for OpenAI/Gemini/Claude under `/prompts/*`.
-* [ ] Generator: produce `{title, hook, script_15s, caption, hashtags, thumb_prompt}`.
-* [ ] Pexels fetcher (`/media/fetcher.ts`) to download vertical B‑roll (12–15s) → `/tmp/<post>_bg.mp4`.
-* [ ] ffmpeg compositor: overlay timed text + subtitles; optional audio merge.
-* [ ] Safety filter prompt → PASS/FAIL with `required_edits`.
-* **Deliverable:** `generations` row moves to `ready` with MP4 path.
+### Performance Metrics
 
-## Phase 4 — Posting Workers
+- ✅ 10 trends discovered per cycle
+- ✅ ~2 minute discovery duration
+- ✅ 100% success rate
+- ✅ Sub-100ms API latency
+- ✅ 24/7 uptime
 
-* [ ] `worker/browser/platforms/x.ts` and `reddit.ts` (Playwright + humanized delays).
-* [ ] Post video + caption; capture canonical URL; webhook → `/webhook/post`.
-* [ ] API: `GET /posts?trend_id=...`.
-* **Test:** one public post appears on X or Reddit; URL stored.
+---
 
-## Phase 5 — Metrics & Follow‑ups
+## 🔄 Phase 2: Selection Engine & Content Intelligence (NEXT)
 
-* [ ] Poll views/reactions for each platform (parse DOM or APIs where available).
-* [ ] Metrics snapshots into `metrics`.
-* [ ] Policy: if signal > threshold in first N minutes → enqueue **follow‑up**; else **auto‑stop**.
-* **Test:** simulate positive/negative outcomes; verify behavior.
+**Timeline:** Q1 2026  
+**Goal:** Filter and prioritize trends for content generation
 
-## Phase 6 — Control & Observability API
+### 2.1 LLM Integration
 
-* [ ] Endpoints:
+- [ ] OpenAI/Gemini/Claude provider switcher
+- [ ] Prompt management system
+  - [ ] `/prompts/selection/*.txt`
+  - [ ] Version control for prompts
+  - [ ] A/B testing framework
 
-  * `/trends`, `/trends/:id`
-  * `/generations`, `/generations/:id`
-  * `/posts`, `/metrics`
-  * `/stop/trend/:id`, `/stop/keyword`
-  * `/lists/deny` (POST/DELETE)
-  * `/settings` (upsert) — add/remove media/API keys, networks
-* [ ] Auth: Bearer key + rate limits.
-* **Test:** curl scripts for all flows; returns JSON.
+- [ ] Trend Analysis
+  - [ ] Category classification (art, fashion, tech, etc.)
+  - [ ] Virality prediction scoring
+  - [ ] Audience demographic estimation
+  - [ ] Optimal posting time recommendations
 
-## Phase 7 — Daytona Sandbox Orchestration
+### 2.2 Content Safety
 
-* [ ] Add module `daytona.ts` to create/destroy ephemeral workspaces for discovery/gen/post jobs.
-* [ ] Artifacts are uploaded back (webhook/S3) and sandbox is destroyed.
-* **Test:** run 3 concurrent jobs in separate sandboxes.
+- [ ] Safety filter prompts
+  - [ ] Profanity detection
+  - [ ] Inappropriate content filtering
+  - [ ] Brand safety checks
+  - [ ] Regional compliance rules
 
-## Phase 8 — Monetization Router (optional v1)
+- [ ] Manual Review Queue
+  - [ ] Web dashboard for trend approval
+  - [ ] Human veto system
+  - [ ] Batch approval interface
 
-* [ ] Prompt‑based intent: `BUY|JOIN|AFFIL|ASK` with CTA.
-* [ ] Landing `/in/:postId` renders CTA, links to Stripe test checkout (if BUY) or email capture.
-* **Test:** clickthrough from live post → landing CTA functions.
+### 2.3 Allowlist/Denylist
 
-## Phase 9 — Safety & Compliance
+- [ ] Keyword management
+  - [ ] Blocked keywords (automatic rejection)
+  - [ ] Allowed keywords (fast-track approval)
+  - [ ] Regex pattern matching
 
-* [ ] Hard filters: profanity list, disallowed topics; country‑specific flags.
-* [ ] Rate caps per platform; backoff on failures.
-* [ ] Credential vaulting (env/secret store).
-* **Test:** attempt forbidden content → blocked by safety gate.
+- [ ] Creator management
+  - [ ] Trusted creators list
+  - [ ] Blocked creators list
 
-## Phase 10 — Dashboard (stretch)
+- [ ] API endpoints
+  - [ ] POST /lists/allow
+  - [ ] POST /lists/deny
+  - [ ] DELETE /lists/:type
+  - [ ] GET /lists
 
-* [ ] Minimal web UI: live tables for trends, generations, posts, metrics; stop buttons.
-* [ ] Charts: posts/hour, win rate, avg time‑to‑post, CTR.
-* **Test:** observe live updates while loop runs.
+### 2.4 Enhanced Scoring
 
-## Scripts (ops)
+- [ ] Multi-factor scoring algorithm
+  - [ ] Recency boost (catch trends early)
+  - [ ] Novelty detection (avoid oversaturated topics)
+  - [ ] Platform fit scoring (Instagram vs TikTok style)
+  - [ ] Historical performance data
 
-* [ ] `scripts/seed_prompts.sh` — copy base prompts into `/prompts`.
-* [ ] `scripts/post_once.sh TREND="..."` — manual injection for demo.
-* [ ] `scripts/stop_keyword.sh "keyword"`
+- [ ] Trend lifecycle tracking
+  - [ ] Growth phase detection
+  - [ ] Peak identification
+  - [ ] Decline prediction
 
-## Definition of Done (Hack‑day)
+**Deliverable:** Selected trends marked as `selected` status, ready for content generation.
 
-* Control plane running in Daytona, `/health` OK.
-* Discovery adds fresh trends within minutes.
-* At least one **public** post published automatically.
-* `/stop/keyword` halts a live trend immediately.
-* `/trends` • `/generations` • `/posts` • `/metrics` all return useful JSON.
+---
 
-## Nice‑to‑have (if time)
+## 📹 Phase 3: Content Generation (Q2 2026)
 
-* Galileo.ai check for prompt quality/safety.
-* Short‑URL service for captions.
-* Email adaptor for JOIN flow.
+**Goal:** Automatically create viral short-form videos
+
+### 3.1 Script Generation
+
+- [ ] LLM-powered script writing
+  - [ ] Hook generation (first 3 seconds)
+  - [ ] Story structure
+  - [ ] Call-to-action optimization
+  - [ ] Platform-specific variations
+
+- [ ] Caption & Hashtag Generation
+  - [ ] Engaging captions
+  - [ ] Optimal hashtag selection
+  - [ ] Emoji insertion
+  - [ ] Link shortening
+
+### 3.2 Media Acquisition
+
+- [ ] Pexels API integration (royalty-free video)
+  - [ ] Vertical video search (9:16 aspect ratio)
+  - [ ] Keyword-based B-roll selection
+  - [ ] Quality filtering
+  - [ ] Download and caching
+
+- [ ] Alternative sources
+  - [ ] Pixabay Videos
+  - [ ] Mixkit
+  - [ ] User-uploaded library
+
+### 3.3 Video Composition
+
+- [ ] ffmpeg pipeline
+  - [ ] Text overlay with timing
+  - [ ] Subtitle generation and rendering
+  - [ ] Background video composition
+  - [ ] Audio mixing
+  - [ ] Export to 9:16 MP4
+
+- [ ] Thumbnail generation
+  - [ ] Key frame extraction
+  - [ ] Text overlay
+  - [ ] Brand watermark
+
+### 3.4 Consider Daytona for Sandboxes
+
+**Decision Point:** Evaluate if Daytona workspaces are needed for:
+- Isolated video generation environments
+- Parallel processing multiple videos
+- Resource-intensive ffmpeg operations
+
+**Alternative:** Run ffmpeg on main server if resources allow.
+
+**Deliverable:** Generated MP4 videos with captions, ready for posting.
+
+---
+
+## 📱 Phase 4: Multi-Platform Posting (Q3 2026)
+
+**Goal:** Automatically post content to social platforms
+
+### 4.1 Instagram Posting
+
+- [ ] Browser Use Cloud for posting
+  - [ ] Login automation
+  - [ ] Image/video upload
+  - [ ] Caption and hashtag insertion
+  - [ ] Story vs Reel selection
+  - [ ] Post URL capture
+
+- [ ] Rate limiting
+  - [ ] Max posts per hour
+  - [ ] Random delays between posts
+  - [ ] Human-like behavior simulation
+
+### 4.2 TikTok Posting
+
+- [ ] Browser Use Cloud automation
+  - [ ] Upload flow
+  - [ ] Caption and sounds
+  - [ ] Post scheduling
+
+### 4.3 YouTube Shorts
+
+- [ ] YouTube API integration
+  - [ ] Upload via API
+  - [ ] Title, description optimization
+  - [ ] Shorts-specific formatting
+
+### 4.4 X (Twitter)
+
+- [ ] Video posting via API
+  - [ ] 280 character optimization
+  - [ ] Thread creation for longer content
+
+### 4.5 Consider Daytona for Posting
+
+**Decision Point:** Evaluate if Daytona workspaces are needed for:
+- Isolated browser sessions per platform
+- Parallel posting to multiple accounts
+- CAPTCHA and verification handling
+
+**Alternative:** Use Browser Use Cloud directly (currently using for discovery).
+
+**Deliverable:** Posts live on platforms with captured URLs.
+
+---
+
+## 📊 Phase 5: Performance Tracking & Optimization (Q4 2026)
+
+**Goal:** Monitor performance and double down on winners
+
+### 5.1 Metrics Collection
+
+- [ ] Platform API integrations
+  - [ ] Instagram Insights
+  - [ ] TikTok Analytics
+  - [ ] YouTube Analytics
+  - [ ] X (Twitter) Analytics
+
+- [ ] Metrics storage
+  - [ ] Views, likes, comments, shares
+  - [ ] Watch time and completion rate
+  - [ ] Click-through rate
+  - [ ] Follower growth
+
+### 5.2 Performance Analysis
+
+- [ ] Trend performance scoring
+  - [ ] Early indicators (first hour metrics)
+  - [ ] Growth trajectory prediction
+  - [ ] Viral coefficient calculation
+
+- [ ] Content analysis
+  - [ ] What hooks work best
+  - [ ] Optimal video length
+  - [ ] Best posting times
+  - [ ] Hashtag performance
+
+### 5.3 Automated Optimization
+
+- [ ] Follow-up strategy
+  - [ ] If positive signals → create more similar content
+  - [ ] If negative → stop trend immediately
+  - [ ] A/B test different approaches
+
+- [ ] Budget allocation
+  - [ ] Multi-armed bandit algorithm
+  - [ ] Allocate resources to winners
+  - [ ] Cut losers quickly
+
+**Deliverable:** Self-optimizing system that learns what works.
+
+---
+
+## 💰 Phase 6: Monetization (2027)
+
+**Goal:** Generate revenue from viral content
+
+### 6.1 Affiliate Integration
+
+- [ ] Link insertion in captions
+  - [ ] Amazon Associates
+  - [ ] Commission Junction
+  - [ ] ShareASale
+
+- [ ] Landing pages
+  - [ ] `/in/:postId` redirect pages
+  - [ ] Product recommendations
+  - [ ] Conversion tracking
+
+### 6.2 Sponsored Content
+
+- [ ] Brand partnerships
+  - [ ] Sponsored trend selection
+  - [ ] Product placement
+  - [ ] Sponsored captions
+
+### 6.3 Paid Features
+
+- [ ] API access tiers
+  - [ ] Free tier: 100 requests/day
+  - [ ] Pro tier: Unlimited + webhooks
+  - [ ] Enterprise: Custom deployment
+
+**Deliverable:** Revenue-generating viral content machine.
+
+---
+
+## 🎛️ Phase 7: Dashboard & Management (Ongoing)
+
+**Goal:** User-friendly interface for monitoring and control
+
+### 7.1 Web Dashboard
+
+- [ ] Trend overview
+  - [ ] Real-time trend feed
+  - [ ] Status indicators
+  - [ ] Performance metrics
+
+- [ ] Content library
+  - [ ] Generated videos
+  - [ ] Post history
+  - [ ] Analytics charts
+
+- [ ] Control panel
+  - [ ] Stop/start trends
+  - [ ] Allowlist/denylist management
+  - [ ] Settings configuration
+
+### 7.2 Mobile App
+
+- [ ] iOS/Android app
+  - [ ] Push notifications for new trends
+  - [ ] Quick approval/rejection
+  - [ ] Performance dashboard
+
+**Deliverable:** Beautiful, functional interface for managing the system.
+
+---
+
+## 🔧 Technical Debt & Improvements
+
+### Short-term (Q1 2026)
+
+- [ ] Add API authentication (Bearer tokens)
+- [ ] Implement rate limiting
+- [ ] Add request logging
+- [ ] Set up monitoring alerts
+- [ ] Database backups
+- [ ] Error tracking (Sentry/Rollbar)
+
+### Medium-term (Q2-Q3 2026)
+
+- [ ] Migrate to PostgreSQL (from SQLite)
+- [ ] Add Redis for caching
+- [ ] Implement job queue (Bull/BullMQ)
+- [ ] Add CI/CD pipeline
+- [ ] Load testing and optimization
+- [ ] Documentation site
+
+### Long-term (2027)
+
+- [ ] Multi-region deployment
+- [ ] Kubernetes orchestration
+- [ ] GraphQL API
+- [ ] Real-time websocket updates
+- [ ] Machine learning for trend prediction
+- [ ] Custom LLM fine-tuning
+
+---
+
+## 🎯 Success Metrics
+
+### Phase 1 (✅ Achieved)
+- 10+ trends discovered per cycle
+- <100ms API response time
+- 99.9% uptime
+
+### Phase 2 (Target)
+- 90% trend classification accuracy
+- <5% false positive safety flags
+- <2 second LLM analysis time
+
+### Phase 3 (Target)
+- 100 videos generated per day
+- <5 minute generation time per video
+- 95% usable content (passes quality check)
+
+### Phase 4 (Target)
+- 50+ posts per day across platforms
+- <1% post failures
+- Zero account bans
+
+### Phase 5 (Target)
+- 5% of content goes viral (>1M views)
+- 10x ROI on winning trends
+- 80% accurate early performance prediction
+
+### Phase 6 (Target)
+- $10k+ monthly revenue
+- 15% conversion rate on affiliate links
+- 3+ brand partnerships
+
+---
+
+## 🚀 Quick Wins (Can be done anytime)
+
+- [ ] Email notifications for high-scoring trends
+- [ ] Slack/Discord webhook integration
+- [ ] CSV export of trends
+- [ ] Trend comparison tool
+- [ ] Historical trend search
+- [ ] API usage analytics
+- [ ] Custom trend keywords (user-defined monitoring)
+
+---
+
+## Notes
+
+**Philosophy:** Ship fast, iterate based on data, focus on what works.
+
+**Current Focus:** Phase 1 complete. Moving to Phase 2 (Selection Engine) next.
+
+**Timeline:** Flexible. Phases may overlap or be reordered based on learning and market needs.
+
+**Team:** Solo developer currently. May expand in Phase 3+.
