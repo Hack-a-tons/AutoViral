@@ -63,34 +63,27 @@ async function scrapeInstagramWithBrowserUse() {
     // Create task using Browser Use Cloud REST API
     // Correct endpoint: /api/v1/run-task (not /v1/tasks)
     const createResponse = await axios.post('https://api.browser-use.com/api/v1/run-task', {
-      task: `Go to Instagram explore page (instagram.com/explore).
-             DO NOT login - view the public page only.
-             
-             Find 5-8 trending hashtags or topics on the explore page.
-             For EACH hashtag you find:
-             1. Click on the hashtag to open its page
-             2. Look for the post count (usually shows like "123K posts" or "1.5M posts")
-             3. Look at the top 3-5 posts and note their engagement (likes, comments if visible)
-             4. Estimate engagement level: "very-high" (>100K likes), "high" (10K-100K), "medium" (1K-10K), "low" (<1K)
-             5. Go back to explore to find the next hashtag
-             
-             Return ONLY a JSON array with this exact structure:
-             [
-               {
-                 "hashtag": "#example",
-                 "postCount": 150000,
-                 "engagement": "high",
-                 "topPostLikes": 25000,
-                 "examplePostUrl": "https://instagram.com/p/ABC123/"
-               }
-             ]
-             
-             Important: 
-             - Include the # in hashtag names
-             - Use actual numbers for postCount (convert "1.5M" to 1500000, "150K" to 150000)
-             - topPostLikes should be from the most liked post you see
-             - examplePostUrl should be a real Instagram post URL
-             - If you hit a login wall, try clicking "Not now" or navigating around it`,
+      task: `CRITICAL: Your response MUST be ONLY valid JSON with NO explanatory text before or after.
+
+Go to instagram.com/explore (public page, DO NOT login).
+
+Find 5-8 trending hashtags. For EACH hashtag:
+1. Click the hashtag
+2. Note post count (convert "1.5M" → 1500000, "150K" → 150000)
+3. Look at top posts, get highest like count
+4. Note example post URL
+5. Determine engagement: "very-high" (>100K), "high" (10K-100K), "medium" (1K-10K), "low" (<1K)
+6. Go back to explore
+
+YOUR ENTIRE RESPONSE MUST BE THIS JSON ARRAY (no text before/after):
+[{"hashtag":"#example","postCount":150000,"engagement":"high","topPostLikes":25000,"examplePostUrl":"https://instagram.com/p/ABC123/"}]
+
+Rules:
+- Start response with [ and end with ]
+- No "Here is", "I found", "Below is" text
+- Just pure JSON array
+- Include # in hashtags
+- Use numbers not strings with K/M`,
       result_schema: {
         type: 'array',
         items: {
