@@ -11,6 +11,9 @@ RUN npm install
 # Copy source code
 COPY src ./src
 
+# Create data directory for tracking
+RUN mkdir -p /app/data
+
 EXPOSE 3001
 
 CMD ["npm", "start"]

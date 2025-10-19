@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
+import { calculateGrowthVelocity, updateTrackedPosts, getTrackingStats } from './trending-tracker.js';
 
 dotenv.config();
 
@@ -36,12 +37,33 @@ async function discoverInstagramTrends() {
     
     console.log(`[Instagram Discovery] Found ${trends.length} trends`);
     
-    // Send each trend to API
+    // Send each trend to API and collect stats
+    let reported = 0;
+    let duplicates = 0;
+    let totalPosts = 0;
+    let totalLikes = 0;
+    
     for (const trend of trends) {
-      await reportTrend(trend);
+      const result = await reportTrend(trend);
+      if (result && result.created) {
+        reported++;
+        if (trend.metadata?.postCount) totalPosts += trend.metadata.postCount;
+        if (trend.examplePosts?.[0]?.likes) totalLikes += trend.examplePosts[0].likes;
+      } else {
+        duplicates++;
+      }
     }
     
-    console.log('[Instagram Discovery] Complete');
+    // Display stats
+    const trackingStats = getTrackingStats();
+    console.log('\n📊 Discovery Stats:');
+    console.log(`   • Trends found: ${trends.length}`);
+    console.log(`   • New trends: ${reported}`);
+    console.log(`   • Duplicates: ${duplicates}`);
+    if (totalPosts > 0) console.log(`   • Total posts: ${totalPosts.toLocaleString()}`);
+    if (totalLikes > 0) console.log(`   • Avg top post likes: ${Math.round(totalLikes / reported).toLocaleString()}`);
+    console.log(`   • Tracking ${trackingStats.trackedHashtags} hashtags (${trackingStats.totalTrackedPosts} posts)`);
+    console.log('[Instagram Discovery] Complete\n');
   } catch (error) {
     console.error('[Instagram Discovery] Error:', error.message);
   }
@@ -227,21 +249,37 @@ Rules:
       .slice(0, 10) // Top 10 trends
       .map(item => {
         const postCount = parseInt(item.postCount) || 0;
-        const recentPosts = Math.floor(postCount * 0.12); // Estimate 12% recent
-        const velocity = calculateVelocity(postCount, recentPosts);
-        const engagement = (item.engagement || 'moderate').toLowerCase();
-        const score = calculateScore(velocity, engagement);
         const topPostLikes = parseInt(item.topPostLikes) || 0;
+        const engagement = (item.engagement || 'moderate').toLowerCase();
         
-        // Build enhanced metadata
+        // Calculate REAL growth velocity by comparing with previous discovery
+        const growthData = calculateGrowthVelocity(item.hashtag, [], {
+          postCount,
+          topPostLikes
+        });
+        
+        const velocity = growthData.velocity;
+        const score = calculateScore(velocity, engagement, growthData.growth);
+        
+        // Update tracked posts for next comparison
+        updateTrackedPosts(item.hashtag, [], {
+          postCount,
+          topPostLikes
+        });
+        
+        // Build enhanced metadata with growth tracking
         const metadata = {
           postCount: postCount,
           engagement: engagement,
           velocity: velocity,
-          recentPosts: recentPosts,
           hashtags: [item.hashtag],
           avgLikes: topPostLikes > 0 ? topPostLikes : null,
-          topCreators: []
+          topCreators: [],
+          // Growth tracking data
+          isNew: growthData.isNew,
+          postGrowthRate: growthData.postGrowthRate,
+          likeGrowthRate: growthData.likeGrowthRate,
+          hoursSinceLastCheck: growthData.hoursSinceLastCheck
         };
         
         // Build example posts if we have data
@@ -308,24 +346,33 @@ function calculateVelocity(totalPosts, recentPosts) {
 
 /**
  * Calculate trend score (0-100)
+ * Now uses real growth data instead of estimates
  */
-function calculateScore(velocity, engagement) {
-  let score = 50; // Base score
+function calculateScore(velocity, engagement, growthScore = 0) {
+  let score = 20; // Base score
   
-  // Velocity contribution (40 points)
-  switch (velocity) {
-    case 'very-fast': score += 40; break;
-    case 'fast': score += 30; break;
-    case 'moderate': score += 20; break;
-    case 'slow': score += 10; break;
+  // Growth/Velocity contribution (60 points) - prioritize TRENDING
+  if (velocity === 'new') {
+    score += 30; // New hashtags get moderate score
+  } else if (growthScore > 0) {
+    score += growthScore; // Use actual growth score (0-100)
+  } else {
+    // Fallback to velocity if no growth data yet
+    switch (velocity) {
+      case 'very-fast': score += 50; break;
+      case 'fast': score += 35; break;
+      case 'moderate': score += 20; break;
+      case 'slow': score += 5; break;
+    }
   }
   
-  // Engagement contribution (10 points)
+  // Engagement contribution (20 points)
   switch (engagement) {
-    case 'very-high': score += 10; break;
-    case 'high': score += 7; break;
-    case 'moderate': score += 5; break;
-    default: score += 2;
+    case 'very-high': score += 20; break;
+    case 'high': score += 15; break;
+    case 'medium': score += 10; break;
+    case 'moderate': score += 8; break;
+    default: score += 3;
   }
   
   return Math.min(100, Math.max(0, score));
@@ -347,13 +394,17 @@ async function reportTrend(trend) {
       }
     );
     
+    const isDuplicate = response.data.message.includes('Duplicate') || response.data.message.includes('already exists');
     console.log(`[Reported] ${trend.keyword} - ${response.data.message}`);
+    
+    return { created: !isDuplicate };
   } catch (error) {
     if (error.response) {
       console.error(`[Report Error] ${trend.keyword}:`, error.response.data);
     } else {
       console.error(`[Report Error] ${trend.keyword}:`, error.message);
     }
+    return { created: false };
   }
 }
 
