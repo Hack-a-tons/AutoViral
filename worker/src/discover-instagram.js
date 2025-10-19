@@ -63,17 +63,34 @@ async function scrapeInstagramWithBrowserUse() {
     // Create task using Browser Use Cloud REST API
     // Correct endpoint: /api/v1/run-task (not /v1/tasks)
     const createResponse = await axios.post('https://api.browser-use.com/api/v1/run-task', {
-      task: `Go to Instagram explore page (instagram.com/explore/tags/trending or instagram.com/explore).
-             DO NOT login - just view the public explore page.
-             Look for trending hashtags, topics, or popular posts visible on the page.
-             Extract 5-10 trending topics/hashtags you can see.
-             For each trend, note:
-             1. Hashtag or topic name (with # if applicable)
-             2. Any visible metrics (posts, views, likes if shown)
-             3. Engagement level based on what you see
-             Return ONLY a JSON array, nothing else: 
-             [{"hashtag": "#example", "postCount": 15000, "engagement": "high"}, ...]
-             If you see a login page, try to navigate around it or return what you can see.`,
+      task: `Go to Instagram explore page (instagram.com/explore).
+             DO NOT login - view the public page only.
+             
+             Find 5-8 trending hashtags or topics on the explore page.
+             For EACH hashtag you find:
+             1. Click on the hashtag to open its page
+             2. Look for the post count (usually shows like "123K posts" or "1.5M posts")
+             3. Look at the top 3-5 posts and note their engagement (likes, comments if visible)
+             4. Estimate engagement level: "very-high" (>100K likes), "high" (10K-100K), "medium" (1K-10K), "low" (<1K)
+             5. Go back to explore to find the next hashtag
+             
+             Return ONLY a JSON array with this exact structure:
+             [
+               {
+                 "hashtag": "#example",
+                 "postCount": 150000,
+                 "engagement": "high",
+                 "topPostLikes": 25000,
+                 "examplePostUrl": "https://instagram.com/p/ABC123/"
+               }
+             ]
+             
+             Important: 
+             - Include the # in hashtag names
+             - Use actual numbers for postCount (convert "1.5M" to 1500000, "150K" to 150000)
+             - topPostLikes should be from the most liked post you see
+             - examplePostUrl should be a real Instagram post URL
+             - If you hit a login wall, try clicking "Not now" or navigating around it`,
       result_schema: {
         type: 'array',
         items: {
@@ -81,7 +98,9 @@ async function scrapeInstagramWithBrowserUse() {
           properties: {
             hashtag: { type: 'string' },
             postCount: { type: 'number' },
-            engagement: { type: 'string' }
+            engagement: { type: 'string' },
+            topPostLikes: { type: 'number' },
+            examplePostUrl: { type: 'string' }
           }
         }
       }
@@ -174,7 +193,7 @@ async function scrapeInstagramWithBrowserUse() {
     
     console.log(`[Browser Use Cloud] Received ${rawTrends.length} raw trends`);
     
-    // Transform Browser Use results into our trend format
+    // Transform Browser Use results into our trend format with enhanced data
     const trends = rawTrends
       .filter(item => item.hashtag && item.postCount)
       .slice(0, 10) // Top 10 trends
@@ -184,19 +203,46 @@ async function scrapeInstagramWithBrowserUse() {
         const velocity = calculateVelocity(postCount, recentPosts);
         const engagement = (item.engagement || 'moderate').toLowerCase();
         const score = calculateScore(velocity, engagement);
+        const topPostLikes = parseInt(item.topPostLikes) || 0;
+        
+        // Build enhanced metadata
+        const metadata = {
+          postCount: postCount,
+          engagement: engagement,
+          velocity: velocity,
+          recentPosts: recentPosts,
+          hashtags: [item.hashtag],
+          avgLikes: topPostLikes > 0 ? topPostLikes : null,
+          topCreators: []
+        };
+        
+        // Build example posts if we have data
+        const examplePosts = [];
+        if (item.examplePostUrl && topPostLikes > 0) {
+          examplePosts.push({
+            postUrl: item.examplePostUrl,
+            likes: topPostLikes,
+            thumbnailUrl: null // Browser Use didn't capture this
+          });
+        }
+        
+        // Build platform data
+        const platformData = {
+          instagram: {
+            hashtagUrl: `https://instagram.com/explore/tags/${item.hashtag.replace('#', '')}/`,
+            postCount: postCount,
+            avgEngagement: topPostLikes > 0 ? (topPostLikes / postCount * 100).toFixed(2) : null
+          }
+        };
         
         return {
           keyword: item.hashtag.startsWith('#') ? item.hashtag : `#${item.hashtag}`,
           source: 'instagram',
           score: score,
           reason: `${velocity} velocity with ${engagement} engagement`,
-          metadata: {
-            postCount: postCount,
-            engagement: engagement,
-            velocity: velocity,
-            recentPosts: recentPosts,
-            hashtags: [item.hashtag]
-          }
+          metadata: metadata,
+          examplePosts: examplePosts.length > 0 ? examplePosts : undefined,
+          platformData: platformData
         };
       });
     
