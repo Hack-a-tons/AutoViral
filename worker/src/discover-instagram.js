@@ -63,15 +63,17 @@ async function scrapeInstagramWithBrowserUse() {
     // Create task using Browser Use Cloud REST API
     // Correct endpoint: /api/v1/run-task (not /v1/tasks)
     const createResponse = await axios.post('https://api.browser-use.com/api/v1/run-task', {
-      task: `Go to Instagram explore page (instagram.com/explore). 
-             If login is required, use username: ${INSTAGRAM_USERNAME} and password: ${INSTAGRAM_PASSWORD}.
-             Extract the top 10 trending hashtags currently showing.
-             For each trending hashtag, collect:
-             1. Hashtag name (including #)
-             2. Approximate post count  
-             3. Engagement indicators (likes, comments visible)
-             Return as a JSON array with format: 
-             [{"hashtag": "#example", "postCount": 15000, "engagement": "high"}]`,
+      task: `Go to Instagram explore page (instagram.com/explore/tags/trending or instagram.com/explore).
+             DO NOT login - just view the public explore page.
+             Look for trending hashtags, topics, or popular posts visible on the page.
+             Extract 5-10 trending topics/hashtags you can see.
+             For each trend, note:
+             1. Hashtag or topic name (with # if applicable)
+             2. Any visible metrics (posts, views, likes if shown)
+             3. Engagement level based on what you see
+             Return ONLY a JSON array, nothing else: 
+             [{"hashtag": "#example", "postCount": 15000, "engagement": "high"}, ...]
+             If you see a login page, try to navigate around it or return what you can see.`,
       result_schema: {
         type: 'array',
         items: {
