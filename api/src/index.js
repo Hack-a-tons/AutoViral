@@ -111,7 +111,11 @@ app.post('/webhook/trend', authMiddleware, async (req, res) => {
       thumbnailUrl, media, examplePosts, platformData, analysis
     } = req.body;
     
-    logger.info(`Webhook received`, { keyword, source, score });
+    // Log with postCount if available (will be formatted as K/M)
+    const logContext = { keyword, source, score };
+    if (metadata?.postCount) logContext.postCount = metadata.postCount;
+    if (metadata?.avgLikes) logContext.avgLikes = metadata.avgLikes;
+    logger.info(`Webhook received`, logContext);
     
     if (!keyword || !source) {
       logger.warn('Invalid webhook data', { keyword, source });
