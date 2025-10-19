@@ -82,7 +82,8 @@ async function gracefulShutdown(signal) {
   
   // Wait for current discovery to finish
   if (isDiscoveryRunning) {
-    console.log('[Shutdown] Waiting for current discovery to complete...');
+    console.log('[Shutdown] ⚠️  Restart pending - Waiting for current discovery to complete...');
+    console.log('[Shutdown] Discovery will finish, then worker will shutdown gracefully');
     
     // Wait up to 30 seconds for discovery to finish
     const maxWait = 30000; // 30 seconds

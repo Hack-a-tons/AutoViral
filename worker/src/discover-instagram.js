@@ -151,37 +151,41 @@ async function scrapeInstagramWithBrowserUse() {
       task: `CRITICAL: Your response MUST be ONLY valid JSON with NO explanatory text before or after.
 
 IMPORTANT: Work at HUMAN SPEED to avoid rate limiting!
-- Wait 3-5 seconds between each action
-- Scroll slowly
-- Move mouse naturally
-- Random pauses (2-4 seconds) between clicks
+- Wait 3-5 seconds between actions
+- Scroll slowly and naturally
+- Random pauses
 
 Go to instagram.com/explore (public page, DO NOT login).
 
-Find ONLY 5 trending hashtags (not 8, to reduce load). For EACH hashtag:
-1. **WAIT 3 seconds** before clicking
-2. Click the hashtag
-3. **WAIT 4 seconds** for page to load fully
-4. Scroll down slowly (human speed)
-5. Note post count (convert "1.5M" → 1500000, "150K" → 150000)
-6. Look at top 2-3 posts only (not all), get highest like count
-7. Note one example post URL
-8. **WAIT 3 seconds** before going back
-9. Go back to explore
-10. **WAIT 2 seconds** before next hashtag
+DON'T click into individual hashtags (they require login).
+Instead, scrape the visible explore page:
 
-Determine engagement: "very-high" (>100K), "high" (10K-100K), "medium" (1K-10K), "low" (<1K)
+1. Look at the trending topics/hashtags shown on the main explore page
+2. For each visible trending topic (aim for 5-8):
+   - Get the hashtag name
+   - Estimate popularity from position/size (top = high, side = medium, bottom = low)
+   - If post count is visible, note it (convert "1.5M" → 1500000, "150K" → 150000)
+3. For visible post thumbnails:
+   - Hover over posts to see like counts if possible
+   - Note a few example post URLs
+4. Scroll down slowly to see more trends (WAIT 3 seconds between scrolls)
+
+Estimate data if exact numbers not visible:
+- Top trending: postCount ~1000000, engagement "high"
+- Medium trending: postCount ~500000, engagement "medium"  
+- Lower trending: postCount ~100000, engagement "low"
 
 YOUR ENTIRE RESPONSE MUST BE THIS JSON ARRAY (no text before/after):
-[{"hashtag":"#example","postCount":150000,"engagement":"high","topPostLikes":25000,"examplePostUrl":"https://instagram.com/p/ABC123/"}]
+[{"hashtag":"#example","postCount":1000000,"engagement":"high","topPostLikes":50000,"examplePostUrl":"https://instagram.com/p/ABC123/"}]
 
 Rules:
 - Start response with [ and end with ]
-- No "Here is", "I found", "Below is" text
+- NO explanatory text ("Here is", "I found", "I was unable", etc.)
 - Just pure JSON array
 - Include # in hashtags
 - Use numbers not strings with K/M
-- WORK SLOWLY - humans don't click instantly!`,
+- If you can't get data, return empty array: []
+- DO NOT return error messages in plain text`,
       result_schema: {
         type: 'array',
         items: {
@@ -271,6 +275,16 @@ Rules:
     let rawTrends = [];
     
     if (typeof outputData === 'string') {
+      // Check if Browser Use returned an error message instead of JSON
+      if (outputData.startsWith('I was unable') || 
+          outputData.startsWith('The task could not') ||
+          outputData.startsWith('I successfully')) {
+        console.error('[Browser Use Cloud] ❌ Browser Use returned error message instead of JSON');
+        console.log('[Browser Use Cloud] Error:', outputData.substring(0, 300));
+        console.log('[Browser Use Cloud] Tip: Instagram may be blocking access. Try different approach.');
+        return [];
+      }
+      
       try {
         rawTrends = JSON.parse(outputData);
       } catch (e) {
