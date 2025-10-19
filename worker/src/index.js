@@ -14,10 +14,22 @@ console.log(`Discovery interval: ${DISCOVERY_INTERVAL / 60000} minutes`);
 // Lock to prevent overlapping discoveries
 let isDiscoveryRunning = false;
 
+// Shutdown flag - don't start new discoveries if shutting down
+let isShuttingDown = false;
+
+// Interval reference for cleanup
+let discoveryInterval = null;
+
 /**
  * Run Instagram discovery (with lock to prevent parallel execution)
  */
 async function runDiscovery() {
+  // Don't start new discoveries if shutting down
+  if (isShuttingDown) {
+    console.log(`\n[${new Date().toISOString()}] 🛑 Skipping - Shutdown pending`);
+    return;
+  }
+  
   // Check if discovery is already running
   if (isDiscoveryRunning) {
     console.log(`\n[${new Date().toISOString()}] ⏭️  Skipping - Previous discovery still running`);
@@ -51,10 +63,48 @@ async function runDiscovery() {
 runDiscovery();
 
 // Schedule periodic discovery
-setInterval(runDiscovery, DISCOVERY_INTERVAL);
+discoveryInterval = setInterval(runDiscovery, DISCOVERY_INTERVAL);
 
-// Keep process alive
-process.on('SIGINT', () => {
-  console.log('\nWorker shutting down...');
-  process.exit();
-});
+/**
+ * Graceful shutdown handler
+ */
+async function gracefulShutdown(signal) {
+  console.log(`\n[${new Date().toISOString()}] 📴 Received ${signal}, initiating graceful shutdown...`);
+  
+  // Set shutdown flag to prevent new discoveries
+  isShuttingDown = true;
+  
+  // Stop the interval
+  if (discoveryInterval) {
+    clearInterval(discoveryInterval);
+    console.log('[Shutdown] Stopped discovery scheduler');
+  }
+  
+  // Wait for current discovery to finish
+  if (isDiscoveryRunning) {
+    console.log('[Shutdown] Waiting for current discovery to complete...');
+    
+    // Wait up to 30 seconds for discovery to finish
+    const maxWait = 30000; // 30 seconds
+    const startWait = Date.now();
+    
+    while (isDiscoveryRunning && (Date.now() - startWait) < maxWait) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const elapsed = ((Date.now() - startWait) / 1000).toFixed(1);
+      console.log(`[Shutdown] Still waiting... (${elapsed}s)`);
+    }
+    
+    if (isDiscoveryRunning) {
+      console.log('[Shutdown] ⚠️  Discovery did not finish in time, forcing shutdown');
+    } else {
+      console.log('[Shutdown] ✅ Discovery completed');
+    }
+  }
+  
+  console.log('[Shutdown] 👋 Worker shutdown complete');
+  process.exit(0);
+}
+
+// Handle graceful shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // Docker stop
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));   // Ctrl+C

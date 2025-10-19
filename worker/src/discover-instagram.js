@@ -13,6 +13,50 @@ const INSTAGRAM_PASSWORD = process.env.INSTAGRAM_PASSWORD;
 // Track current running task to cancel on restart
 let currentTaskId = null;
 
+// Shutdown flag for graceful shutdown
+let isShuttingDown = false;
+
+/**
+ * Cancel current Browser Use task
+ */
+async function cancelCurrentTask() {
+  if (!currentTaskId || !BROWSER_USE_API_KEY) {
+    return;
+  }
+  
+  console.log(`[Shutdown] Cancelling Browser Use task: ${currentTaskId}`);
+  try {
+    await axios.post(
+      `https://api.browser-use.com/api/v1/task/${currentTaskId}/cancel`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${BROWSER_USE_API_KEY}`
+        }
+      }
+    );
+    console.log('[Shutdown] ✅ Browser Use task cancelled');
+  } catch (error) {
+    console.log('[Shutdown] Browser Use task may have already finished');
+  }
+  currentTaskId = null;
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', async () => {
+  console.log('[Shutdown] 📴 Received SIGTERM in discovery process');
+  isShuttingDown = true;
+  await cancelCurrentTask();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('[Shutdown] 📴 Received SIGINT in discovery process');
+  isShuttingDown = true;
+  await cancelCurrentTask();
+  process.exit(0);
+});
+
 /**
  * Discover trending topics on Instagram using Browser Use
  * Focus: SPEED over volume - get fresh, fast-moving trends
