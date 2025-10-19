@@ -7,6 +7,15 @@ dotenv.config();
 
 const logger = new Logger('Instagram Discovery');
 
+/**
+ * Format numbers: 1000 → 1K, 1000000 → 1M (only round numbers)
+ */
+function formatNum(num) {
+  if (num >= 1000000 && num % 1000000 === 0) return `${num / 1000000}M`;
+  if (num >= 1000 && num % 1000 === 0) return `${num / 1000}K`;
+  return num.toLocaleString();
+}
+
 const API_URL = process.env.API_URL || 'http://api:3000';
 const AUTH_KEY = process.env.AUTH_BEARER_KEY;
 const BROWSER_USE_API_KEY = process.env.BROWSER_USE_API_KEY;
@@ -107,8 +116,8 @@ async function discoverInstagramTrends() {
     console.log(`   • Trends found: ${trends.length}`);
     console.log(`   • New trends: ${reported}`);
     console.log(`   • Duplicates: ${duplicates}`);
-    if (totalPosts > 0) console.log(`   • Total posts: ${totalPosts.toLocaleString()}`);
-    if (totalLikes > 0) console.log(`   • Avg top post likes: ${Math.round(totalLikes / reported).toLocaleString()}`);
+    if (totalPosts > 0) console.log(`   • Total posts: ${formatNum(totalPosts)}`);
+    if (totalLikes > 0) console.log(`   • Avg top post likes: ${formatNum(Math.round(totalLikes / reported))}`);
     console.log(`   • Tracking ${trackingStats.trackedHashtags} hashtags (${trackingStats.totalTrackedPosts} posts)`);
     console.log('[Instagram Discovery] Complete\n');
   } catch (error) {

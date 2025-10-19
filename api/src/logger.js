@@ -11,6 +11,26 @@ function getTimestamp() {
 }
 
 /**
+ * Format numbers for readability (shorten K/M for round thousands/millions)
+ */
+function formatNumber(num) {
+  if (typeof num !== 'number') return num;
+  
+  // Check if it's a round million (e.g., 1000000, 2000000)
+  if (num >= 1000000 && num % 1000000 === 0) {
+    return `${num / 1000000}M`;
+  }
+  
+  // Check if it's a round thousand (e.g., 1000, 5000)
+  if (num >= 1000 && num % 1000 === 0) {
+    return `${num / 1000}K`;
+  }
+  
+  // Return as-is with commas for readability
+  return num.toLocaleString();
+}
+
+/**
  * Format log message with timestamp and optional context
  */
 function formatLog(level, message, context = null) {
@@ -32,7 +52,11 @@ function formatLog(level, message, context = null) {
       logLine += ` | ${context}`;
     } else if (typeof context === 'object') {
       const contextStr = Object.entries(context)
-        .map(([key, value]) => `${key}=${value}`)
+        .map(([key, value]) => {
+          // Format numbers for readability
+          const formattedValue = typeof value === 'number' ? formatNumber(value) : value;
+          return `${key}=${formattedValue}`;
+        })
         .join(', ');
       logLine += ` | ${contextStr}`;
     }
