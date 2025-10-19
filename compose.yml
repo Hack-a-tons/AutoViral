@@ -42,7 +42,7 @@ services:
       - NODE_ENV=production
       - API_URL=${API_URL}
       - AUTH_BEARER_KEY=${AUTH_BEARER_KEY}
-      - DISCOVERY_INTERVAL_MINUTES=1
+      - DISCOVERY_INTERVAL_MINUTES=1440  # Run once per day (24 hours)
       - LLM_PROVIDER=${LLM_PROVIDER}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
