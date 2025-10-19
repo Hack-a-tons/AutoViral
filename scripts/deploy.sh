@@ -174,9 +174,9 @@ echo -e "\n${GREEN}[4/5] Deploying on server...${NC}"
 # Build docker compose command
 DEPLOY_CMD="cd ${SERVER_PATH} && git pull"
 
-# First, gracefully stop worker (allow up to 60s for Browser Use task to finish)
-echo -e "${YELLOW}Stopping worker gracefully (60s timeout)...${NC}"
-ssh "${SERVER_HOST}" "cd ${SERVER_PATH} && docker compose stop -t 60 worker" || {
+# First, gracefully stop worker (allow up to 15 minutes for Browser Use task to finish)
+echo -e "${YELLOW}Stopping worker gracefully (15 min timeout for Browser Use tasks)...${NC}"
+ssh "${SERVER_HOST}" "cd ${SERVER_PATH} && docker compose stop -t 900 worker" || {
     echo -e "${YELLOW}Warning: Worker stop had issues (may not be running)${NC}"
 }
 

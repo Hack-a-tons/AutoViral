@@ -85,14 +85,20 @@ async function gracefulShutdown(signal) {
     console.log('[Shutdown] ⚠️  Restart pending - Waiting for current discovery to complete...');
     console.log('[Shutdown] Discovery will finish, then worker will shutdown gracefully');
     
-    // Wait up to 30 seconds for discovery to finish
-    const maxWait = 30000; // 30 seconds
+    // Wait up to 15 minutes for discovery to finish (Browser Use tasks can take long)
+    const maxWait = 900000; // 15 minutes (900 seconds)
     const startWait = Date.now();
+    let nextLogTime = 3000; // First log at 3 seconds
     
     while (isDiscoveryRunning && (Date.now() - startWait) < maxWait) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const elapsed = ((Date.now() - startWait) / 1000).toFixed(1);
-      console.log(`[Shutdown] Still waiting... (${elapsed}s)`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Check every second
+      const elapsed = Date.now() - startWait;
+      
+      // Log at exponential intervals: 3s, 6s, 12s, 24s, etc.
+      if (elapsed >= nextLogTime) {
+        console.log(`[Shutdown] Still waiting... (${(elapsed / 1000).toFixed(1)}s)`);
+        nextLogTime *= 2; // Double the interval
+      }
     }
     
     if (isDiscoveryRunning) {
