@@ -162,42 +162,41 @@ async function scrapeInstagramWithBrowserUse() {
     const createResponse = await axios.post('https://api.browser-use.com/api/v1/run-task', {
       task: `CRITICAL: Your response MUST be ONLY valid JSON with NO explanatory text before or after.
 
-IMPORTANT: Work at HUMAN SPEED to avoid rate limiting!
-- Wait 3-5 seconds between actions
-- Scroll slowly and naturally
-- Random pauses
-
 Go to instagram.com/explore (public page, DO NOT login).
 
-DON'T click into individual hashtags (they require login).
-Instead, scrape the visible explore page:
+SIMPLE TASK: Just extract trending topic names from the top of the page.
 
-1. Look at the trending topics/hashtags shown on the main explore page
-2. For each visible trending topic (aim for 5-8):
-   - Get the hashtag name
-   - Estimate popularity from position/size (top = high, side = medium, bottom = low)
-   - If post count is visible, note it (convert "1.5M" → 1500000, "150K" → 150000)
-3. For visible post thumbnails:
-   - Hover over posts to see like counts if possible
-   - Note a few example post URLs
-4. Scroll down slowly to see more trends (WAIT 3 seconds between scrolls)
+Instagram explore page (public/not logged in) shows:
+- Trending topic categories at the top (e.g., "Beauty", "Fashion", "Art", etc.)
+- Post grid below (but engagement data NOT visible without login)
 
-Estimate data if exact numbers not visible:
-- Top trending: postCount ~1000000, engagement "high"
-- Medium trending: postCount ~500000, engagement "medium"  
-- Lower trending: postCount ~100000, engagement "low"
+What to do:
+1. Wait 3 seconds for page to load
+2. Look at the TOP of the page for trending topics/categories
+3. Extract 5-8 trending topic names
+4. Convert to hashtag format (add # if missing)
+
+DO NOT try to:
+- Scroll through posts
+- Get like counts (not visible without login)
+- Get post URLs (not needed)
+- Click anything
+
+Use these ESTIMATED values for all trends:
+- postCount: 1000000
+- engagement: "medium"
+- topPostLikes: 0
+- examplePostUrl: ""
 
 YOUR ENTIRE RESPONSE MUST BE THIS JSON ARRAY (no text before/after):
-[{"hashtag":"#example","postCount":1000000,"engagement":"high","topPostLikes":50000,"examplePostUrl":"https://instagram.com/p/ABC123/"}]
+[{"hashtag":"#Beauty","postCount":1000000,"engagement":"medium","topPostLikes":0,"examplePostUrl":""},{"hashtag":"#Fashion","postCount":1000000,"engagement":"medium","topPostLikes":0,"examplePostUrl":""}]
 
-Rules:
-- Start response with [ and end with ]
-- NO explanatory text ("Here is", "I found", "I was unable", etc.)
+CRITICAL RULES:
+- Start with [ and end with ]
+- NO explanatory text ("Here is", "I found", "I was unable to", etc.)
 - Just pure JSON array
-- Include # in hashtags
-- Use numbers not strings with K/M
-- If you can't get data, return empty array: []
-- DO NOT return error messages in plain text`,
+- If you can't get topics, return: []
+- DO NOT write error messages`,
       result_schema: {
         type: 'array',
         items: {
