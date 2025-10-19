@@ -9,6 +9,9 @@ const BROWSER_USE_API_KEY = process.env.BROWSER_USE_API_KEY;
 const INSTAGRAM_USERNAME = process.env.INSTAGRAM_USERNAME;
 const INSTAGRAM_PASSWORD = process.env.INSTAGRAM_PASSWORD;
 
+// Track current running task to cancel on restart
+let currentTaskId = null;
+
 /**
  * Discover trending topics on Instagram using Browser Use
  * Focus: SPEED over volume - get fresh, fast-moving trends
@@ -57,6 +60,22 @@ async function scrapeInstagramWithBrowserUse() {
     return [];
   }
   
+  // Cancel previous task if still running
+  if (currentTaskId) {
+    console.log(`[Browser Use Cloud] Cancelling previous task: ${currentTaskId}`);
+    try {
+      await axios.post(`https://api.browser-use.com/api/v1/task/${currentTaskId}/cancel`, {}, {
+        headers: {
+          'Authorization': `Bearer ${BROWSER_USE_API_KEY}`
+        }
+      });
+      console.log('[Browser Use Cloud] Previous task cancelled');
+    } catch (e) {
+      console.log('[Browser Use Cloud] Could not cancel previous task (may have already finished)');
+    }
+    currentTaskId = null;
+  }
+  
   try {
     console.log('[Browser Use Cloud] Creating browser task via API...');
     
@@ -65,15 +84,27 @@ async function scrapeInstagramWithBrowserUse() {
     const createResponse = await axios.post('https://api.browser-use.com/api/v1/run-task', {
       task: `CRITICAL: Your response MUST be ONLY valid JSON with NO explanatory text before or after.
 
+IMPORTANT: Work at HUMAN SPEED to avoid rate limiting!
+- Wait 3-5 seconds between each action
+- Scroll slowly
+- Move mouse naturally
+- Random pauses (2-4 seconds) between clicks
+
 Go to instagram.com/explore (public page, DO NOT login).
 
-Find 5-8 trending hashtags. For EACH hashtag:
-1. Click the hashtag
-2. Note post count (convert "1.5M" → 1500000, "150K" → 150000)
-3. Look at top posts, get highest like count
-4. Note example post URL
-5. Determine engagement: "very-high" (>100K), "high" (10K-100K), "medium" (1K-10K), "low" (<1K)
-6. Go back to explore
+Find ONLY 5 trending hashtags (not 8, to reduce load). For EACH hashtag:
+1. **WAIT 3 seconds** before clicking
+2. Click the hashtag
+3. **WAIT 4 seconds** for page to load fully
+4. Scroll down slowly (human speed)
+5. Note post count (convert "1.5M" → 1500000, "150K" → 150000)
+6. Look at top 2-3 posts only (not all), get highest like count
+7. Note one example post URL
+8. **WAIT 3 seconds** before going back
+9. Go back to explore
+10. **WAIT 2 seconds** before next hashtag
+
+Determine engagement: "very-high" (>100K), "high" (10K-100K), "medium" (1K-10K), "low" (<1K)
 
 YOUR ENTIRE RESPONSE MUST BE THIS JSON ARRAY (no text before/after):
 [{"hashtag":"#example","postCount":150000,"engagement":"high","topPostLikes":25000,"examplePostUrl":"https://instagram.com/p/ABC123/"}]
@@ -83,7 +114,8 @@ Rules:
 - No "Here is", "I found", "Below is" text
 - Just pure JSON array
 - Include # in hashtags
-- Use numbers not strings with K/M`,
+- Use numbers not strings with K/M
+- WORK SLOWLY - humans don't click instantly!`,
       result_schema: {
         type: 'array',
         items: {
@@ -114,16 +146,19 @@ Rules:
       throw new Error(`No task ID in response. Response: ${JSON.stringify(createResponse.data)}`);
     }
     
+    // Track this task so we can cancel it if needed
+    currentTaskId = taskId;
+    
     console.log(`[Browser Use Cloud] Task created: ${taskId}`);
     console.log(`[Browser Use Cloud] Status: ${createResponse.data.status}`);
     if (createResponse.data.live_url) {
       console.log(`[Browser Use Cloud] Live preview: ${createResponse.data.live_url}`);
     }
-    console.log('[Browser Use Cloud] Waiting for completion...');
+    console.log('[Browser Use Cloud] Waiting for completion (working at human speed to avoid rate limits)...');
     
-    // Poll for task completion (max 3 minutes for Instagram login + scraping)
+    // Poll for task completion (max 5 minutes - working at human speed takes longer)
     let attempts = 0;
-    const maxAttempts = 36; // 36 * 5 = 180 seconds (3 minutes)
+    const maxAttempts = 60; // 60 * 5 = 300 seconds (5 minutes)
     let result = null;
     
     while (attempts < maxAttempts) {
@@ -240,6 +275,10 @@ Rules:
       });
     
     console.log(`[Browser Use Cloud] Processed ${trends.length} trends for reporting`);
+    
+    // Clear task ID on success
+    currentTaskId = null;
+    
     return trends;
     
   } catch (error) {
@@ -247,6 +286,9 @@ Rules:
     if (error.response) {
       console.error('[Browser Use Cloud] Response:', error.response.status, JSON.stringify(error.response.data));
     }
+    
+    // Clear task ID on error (will be cancelled on next run if still active)
+    currentTaskId = null;
     
     // Return empty array on error - worker will retry on next cycle
     return [];
