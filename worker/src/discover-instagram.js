@@ -1,8 +1,11 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { calculateGrowthVelocity, updateTrackedPosts, getTrackingStats } from './trending-tracker.js';
+import Logger from './logger.js';
 
 dotenv.config();
+
+const logger = new Logger('Instagram Discovery');
 
 const API_URL = process.env.API_URL || 'http://api:3000';
 const AUTH_KEY = process.env.AUTH_BEARER_KEY;
@@ -143,7 +146,7 @@ async function scrapeInstagramWithBrowserUse() {
   }
   
   try {
-    console.log('[Browser Use Cloud] Creating browser task via API...');
+    logger.api('POST', 'https://api.browser-use.com/api/v1/run-task', 'Creating browser task');
     
     // Create task using Browser Use Cloud REST API
     // Correct endpoint: /api/v1/run-task (not /v1/tasks)
@@ -235,7 +238,8 @@ Rules:
       await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
       
       // Get task status - endpoint: /api/v1/get-task-status
-      const statusResponse = await axios.get(`https://api.browser-use.com/api/v1/task/${taskId}`, {
+      const endpoint = `https://api.browser-use.com/api/v1/task/${taskId}`;
+      const statusResponse = await axios.get(endpoint, {
         headers: {
           'Authorization': `Bearer ${BROWSER_USE_API_KEY}`
         }
@@ -441,8 +445,11 @@ function calculateScore(velocity, engagement, growthScore = 0) {
  */
 async function reportTrend(trend) {
   try {
+    const endpoint = `${API_URL}/webhook/trend`;
+    logger.api('POST', endpoint, `Reporting trend: ${trend.keyword}`);
+    
     const response = await axios.post(
-      `${API_URL}/webhook/trend`,
+      endpoint,
       trend,
       {
         headers: {

@@ -2,12 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+import Logger from './logger.js';
 
 dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
+const logger = new Logger('API');
 
 // Middleware
 app.use(cors());
@@ -109,7 +111,10 @@ app.post('/webhook/trend', authMiddleware, async (req, res) => {
       thumbnailUrl, media, examplePosts, platformData, analysis
     } = req.body;
     
+    logger.info(`Webhook received`, { keyword, source, score });
+    
     if (!keyword || !source) {
+      logger.warn('Invalid webhook data', { keyword, source });
       return res.status(400).json({ error: 'keyword and source are required' });
     }
     
@@ -192,13 +197,14 @@ app.post('/stop/keyword', authMiddleware, async (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`AutoViral API running on port ${PORT}`);
-  console.log(`Health: http://localhost:${PORT}/health`);
-  console.log(`Trends: http://localhost:${PORT}/trends`);
+  logger.success(`AutoViral API running on port ${PORT}`);
+  logger.info(`Health: http://localhost:${PORT}/health`);
+  logger.info(`Trends: http://localhost:${PORT}/trends`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
+  logger.warn('Shutting down gracefully...');
   await prisma.$disconnect();
   process.exit();
 });

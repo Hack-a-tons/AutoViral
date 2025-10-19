@@ -1,15 +1,17 @@
 import dotenv from 'dotenv';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import Logger from './logger.js';
 
 dotenv.config();
 
 const execAsync = promisify(exec);
+const logger = new Logger('Worker');
 
 const DISCOVERY_INTERVAL = parseInt(process.env.DISCOVERY_INTERVAL_MINUTES || '5') * 60 * 1000;
 
-console.log('AutoViral Discovery Worker Starting...');
-console.log(`Discovery interval: ${DISCOVERY_INTERVAL / 60000} minutes`);
+logger.info('AutoViral Discovery Worker Starting...');
+logger.info(`Discovery interval: ${DISCOVERY_INTERVAL / 60000} minutes`);
 
 // Lock to prevent overlapping discoveries
 let isDiscoveryRunning = false;
@@ -40,7 +42,7 @@ async function runDiscovery() {
   isDiscoveryRunning = true;
   const startTime = Date.now();
   
-  console.log(`\n[${new Date().toISOString()}] 🔍 Running Instagram discovery...`);
+  logger.info('🔍 Running Instagram discovery...');
   
   try {
     const { stdout, stderr } = await execAsync('node src/discover-instagram.js');
@@ -48,11 +50,11 @@ async function runDiscovery() {
     if (stderr) console.error(stderr);
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[${new Date().toISOString()}] ✅ Discovery complete (${duration}s)`);
+    logger.success(`Discovery complete (${duration}s)`);
   } catch (error) {
-    console.error('[Discovery Error]:', error.message);
+    logger.error(`Discovery error: ${error.message}`);
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[${new Date().toISOString()}] ❌ Discovery failed (${duration}s)`);
+    logger.error(`Discovery failed (${duration}s)`);
   } finally {
     // Always release lock
     isDiscoveryRunning = false;
@@ -69,7 +71,7 @@ discoveryInterval = setInterval(runDiscovery, DISCOVERY_INTERVAL);
  * Graceful shutdown handler
  */
 async function gracefulShutdown(signal) {
-  console.log(`\n[${new Date().toISOString()}] 📴 Received ${signal}, initiating graceful shutdown...`);
+  logger.warn(`📴 Received ${signal}, initiating graceful shutdown...`);
   
   // Set shutdown flag to prevent new discoveries
   isShuttingDown = true;
@@ -77,7 +79,7 @@ async function gracefulShutdown(signal) {
   // Stop the interval
   if (discoveryInterval) {
     clearInterval(discoveryInterval);
-    console.log('[Shutdown] Stopped discovery scheduler');
+    logger.info('[Shutdown] Stopped discovery scheduler');
   }
   
   // Wait for current discovery to finish
